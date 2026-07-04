@@ -15,7 +15,7 @@ Home Assistant custom integration that controls an **EM2GO Home wallbox** via Mo
 - Start/stop hysteresis (3 min), amp ramping with deadband, rate limiting (max. 3 switch operations per 15 min)
 - Optional notifications on charge start/stop via any `notify` entity (Telegram, mobile app, …)
 - Safe observation: the wallbox state is always read via Modbus, but the integration only writes while the "Control active" switch is on — turn it off to watch and simulate decisions without touching the hardware
-- Companion Lovelace card (`pvsc-card.js`) included
+- Companion Lovelace card included and auto-registered — just add a card of type `custom:pvsc-card` to any dashboard (no manual resource setup needed)
 - UI: German and English
 
 ## EM2GO Modbus quirks (handled by this integration)

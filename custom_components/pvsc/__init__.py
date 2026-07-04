@@ -7,7 +7,10 @@ nicht in die Wallbox-Steuerung ein.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -16,9 +19,32 @@ from .coordinator import PVSCCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+CARD_URL = "/pvsc/pvsc-card.js"
+
+
+async def _async_register_card(hass: HomeAssistant) -> None:
+    """Liefert die mitgelieferte Lovelace-Card (www/pvsc-card.js) selbst aus
+    und lädt sie automatisch auf allen Dashboards - kein manuelles Kopieren
+    nach config/www und keine Dashboard-Resource nötig."""
+    if hass.data.get(f"{DOMAIN}_card_registered"):
+        return
+    hass.data[f"{DOMAIN}_card_registered"] = True
+
+    card_path = Path(__file__).parent / "www" / "pvsc-card.js"
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(CARD_URL, str(card_path), cache_headers=False)]
+    )
+    # Versions-Anhang als Cache-Buster, damit Browser nach Updates die
+    # neue Card laden.
+    from homeassistant.loader import async_get_integration
+
+    integration = await async_get_integration(hass, DOMAIN)
+    add_extra_js_url(hass, f"{CARD_URL}?v={integration.version}")
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
+    await _async_register_card(hass)
 
     # Migration: Die EM2GO Wallbox antwortet nur auf Unit-ID 255 (per
     # Direkttest bestätigt; Unit 0 = Broadcast -> keine Antwort -> Timeout).

@@ -9,5 +9,9 @@
   "codeowners": [
     "@Lu-Fi"
   ],
-  "requirements": []
+  "requirements": [],
+  "dependencies": [
+    "http",
+    "frontend"
+  ]
 }
