@@ -32,16 +32,38 @@ These cost us some debugging, so they are documented here:
 
 ## Installation
 
-### HACS (recommended)
+### Via HACS (recommended)
 
-1. HACS → Integrations → ⋮ → Custom repositories → add `https://github.com/Lu-Fi/ha-em2go-pvsc` (category: Integration)
-2. Install "EM2GO Home PV-Überschussladen"
-3. Restart Home Assistant
-4. Settings → Devices & Services → Add Integration → search "EM2GO"
+> **HACS** (Home Assistant Community Store) must be installed. If not yet set up: [hacs.xyz](https://hacs.xyz)
 
-### Manual
+#### Step 1 – Add the custom repository
 
-Copy `custom_components/pvsc/` into your Home Assistant `config/custom_components/` folder and restart.
+1. Open HACS in the Home Assistant sidebar
+2. Click the **three-dot menu (⋮)** in the top right → **"Custom repositories"**
+3. Enter the repository URL:
+   ```
+   https://github.com/Lu-Fi/ha-em2go-pvsc
+   ```
+4. Select category **"Integration"** → click **"Add"**
+
+#### Step 2 – Install the integration
+
+5. In HACS → Integrations, search for **"EM2GO"**
+6. Open the integration → click **"Download"**
+7. **Restart Home Assistant**
+
+#### Step 3 – Set up the integration
+
+8. **Settings → Devices & Services → Add Integration** → search for "EM2GO"
+9. Follow the setup wizard (Modbus host, sensor entities, etc.)
+
+---
+
+### Manual (without HACS)
+
+Copy the `custom_components/pvsc/` folder into your Home Assistant `config/custom_components/` directory and restart Home Assistant.
+
+---
 
 ## Configuration
 
