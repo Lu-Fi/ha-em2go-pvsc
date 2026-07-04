@@ -1,0 +1,194 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EM2GO Home PV-Überschussladen einrichten",
+        "description": "Unabhängiger Nachbau des Node-RED PV-Überschuss-Flows. Diese Integration rührt die bestehende Node-RED Installation nicht an und schreibt erst dann auf die Wallbox, wenn du den Schalter 'Steuerung aktiv' explizit einschaltest.",
+        "data": {
+          "modbus_host": "Wallbox Modbus-TCP Host",
+          "modbus_port": "Modbus-TCP Port",
+          "modbus_unit": "Modbus Unit-ID",
+          "pv_entity": "Sensor: aktuelle PV-Gesamtleistung (W)",
+          "pv1_entity": "Sensor: Wechselrichter PV-Leistung (W, optional)",
+          "load_entity": "Sensor: Hauslast (W)",
+          "import_entity": "Sensor: Netzbezug (W)",
+          "export_entity": "Sensor: Netzeinspeisung (W)",
+          "battery_charge_entity": "Sensor: Batterie-Ladeleistung (W)",
+          "battery_discharge_entity": "Sensor: Batterie-Entladeleistung (W)",
+          "home_soc_entity": "Sensor: Heimspeicher SOC (%)",
+          "pv_forecast_entity": "Sensor: PV-Prognose Rest-Tag (kWh, optional)",
+          "car_soc_entity": "Sensor: Auto-Ladezustand (%, optional, nur Anzeige)",
+          "car_end_entity": "Sensor: Auto-Ladeende (optional, nur Anzeige)",
+          "car_location_entity": "Device Tracker: Auto-Standort (optional - wenn leer, wird nicht geprüft ob das Auto zuhause ist)",
+          "car_power_entity": "Sensor: Auto-Ladeleistung (optional, nur Anzeige)",
+          "control_on_start": "Steuerung nach dem Start sofort aktiv (schreibt auf die Wallbox)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Diese Wallbox ist bereits konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Technische Parameter",
+        "data": {
+          "notify_enabled": "Benachrichtigung bei Ladestart/-stopp senden",
+          "notify_entity": "Notify-Entity für Meldungen (z. B. Telegram)",
+          "max_load": "Maximaler Bedarf (W)",
+          "battery_kwh": "Batteriekapazität (kWh)",
+          "max_battery_discharge": "Maximale Batterie-Entladeleistung (W)",
+          "inverter_max_output": "Maximale Wechselrichter-Ausgangsleistung (W)",
+          "poll_interval": "Rechenintervall (Sekunden)",
+          "modbus_timeout": "Modbus Timeout pro Anfrage (Sekunden)",
+          "modbus_command_delay": "Modbus Mindestpause zwischen Anfragen (Sekunden)",
+          "modbus_reconnect_backoff": "Modbus Cool-down nach Fehler, bevor neu verbunden wird (Sekunden, verdoppelt sich bei Folgefehlern)",
+          "modbus_connect_settle_delay": "Modbus Pause nach frischem Verbindungsaufbau vor erster Anfrage (Sekunden)",
+          "modbus_framing": "Modbus Framing: 'rtu' (rohe RTU-Rahmen, vermutlich richtig für diese Wallbox) oder 'mbap' (echtes Modbus-TCP)",
+          "max_ampere": "Maximaler Ladestrom (A, 16 bei 11-kW-, 32 bei 22-kW-Version)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "pv": {
+        "name": "PV-Leistung"
+      },
+      "load": {
+        "name": "Hauslast"
+      },
+      "surplus": {
+        "name": "PV-Überschuss (Haus)"
+      },
+      "car_surplus": {
+        "name": "Überschuss für Auto"
+      },
+      "target_ampere": {
+        "name": "Ziel-Ampere"
+      },
+      "ampere": {
+        "name": "Aktuelle Ampere (Vorgabe)"
+      },
+      "correction_faktor": {
+        "name": "Korrekturfaktor"
+      },
+      "battery_support_watts": {
+        "name": "Batterie-Unterstützung"
+      },
+      "battery_avg": {
+        "name": "Batterienutzung Ø 15min"
+      },
+      "stop_cause": {
+        "name": "Abbruchgrund"
+      },
+      "status_text": {
+        "name": "Status"
+      },
+      "em2go_state": {
+        "name": "Status-Code"
+      },
+      "em2go_state_text": {
+        "name": "Status (Wallbox)"
+      },
+      "em2go_power": {
+        "name": "Leistung"
+      },
+      "em2go_ampere": {
+        "name": "Strombegrenzung (Ist)"
+      },
+      "em2go_phases": {
+        "name": "Phasen"
+      },
+      "em2go_energy": {
+        "name": "Zählerstand"
+      },
+      "em2go_session_kwh": {
+        "name": "Geladen (aktuelle Session)"
+      },
+      "car_soc": {
+        "name": "Auto Ladezustand"
+      },
+      "car_end": {
+        "name": "Auto Ladeende"
+      },
+      "modbus_status": {
+        "name": "Datenquelle Wallbox"
+      },
+      "modbus_consecutive_failures": {
+        "name": "Modbus Fehler in Folge"
+      },
+      "modbus_retry_in": {
+        "name": "Modbus nächster Versuch in"
+      }
+    },
+    "binary_sensor": {
+      "plug_connected": {
+        "name": "Stecker verbunden"
+      },
+      "charging": {
+        "name": "Lädt (Ist-Zustand)"
+      },
+      "target_charging": {
+        "name": "Soll laden (eigene Logik)"
+      },
+      "car_home": {
+        "name": "Auto zuhause"
+      },
+      "modbus_connected": {
+        "name": "Modbus verbunden"
+      }
+    },
+    "switch": {
+      "control_enabled": {
+        "name": "Steuerung aktiv (schreibt auf Wallbox)"
+      },
+      "enabled": {
+        "name": "Überschuss-Automatik aktiviert"
+      },
+      "correction_auto": {
+        "name": "Korrekturfaktor automatisch berechnen (statt manuell)"
+      }
+    },
+    "number": {
+      "min_soc": {
+        "name": "Min. SOC"
+      },
+      "optimal_soc": {
+        "name": "Optimaler SOC"
+      },
+      "high_soc": {
+        "name": "Hoher SOC"
+      },
+      "correction_factor": {
+        "name": "Korrekturfaktor (manuell)"
+      },
+      "ampere_deadband": {
+        "name": "Ampere-Totband"
+      },
+      "override_ampere": {
+        "name": "Override: Ampere"
+      },
+      "forced_ampere": {
+        "name": "Test: erzwungene Ampere (0=aus)"
+      }
+    },
+    "select": {
+      "override_mode": {
+        "name": "Override Modus"
+      },
+      "override_phases": {
+        "name": "Override Phasen"
+      },
+      "surplus_mode": {
+        "name": "Überschussberechnung"
+      }
+    },
+    "button": {
+      "reset_stop_cause": {
+        "name": "Abbruchgrund zurücksetzen"
+      }
+    }
+  }
+}
