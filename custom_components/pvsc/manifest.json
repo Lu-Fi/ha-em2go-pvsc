@@ -1,17 +1,17 @@
 {
   "domain": "pvsc",
   "name": "EM2GO Home PV-Überschussladen",
-  "version": "0.4.0",
-  "config_flow": true,
-  "documentation": "https://github.com/Lu-Fi/ha-em2go-pvsc",
-  "issue_tracker": "https://github.com/Lu-Fi/ha-em2go-pvsc/issues",
-  "iot_class": "local_polling",
   "codeowners": [
     "@Lu-Fi"
   ],
-  "requirements": [],
+  "config_flow": true,
   "dependencies": [
-    "http",
-    "frontend"
-  ]
+    "frontend",
+    "http"
+  ],
+  "documentation": "https://github.com/Lu-Fi/ha-em2go-pvsc",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/Lu-Fi/ha-em2go-pvsc/issues",
+  "requirements": [],
+  "version": "0.4.0"
 }
