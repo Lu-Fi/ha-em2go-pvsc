@@ -108,7 +108,7 @@ SENSORS: tuple[PVSCSensorDescription, ...] = (
         value_fn=lambda c: c.em2go["phases"],
     ),
     PVSCSensorDescription(
-        key="em2go_energy", name="Zählerstand", unit="Wh",
+        key="em2go_energy", name="Zählerstand", unit="kWh",
         device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.TOTAL_INCREASING,
         icon="mdi:counter", value_fn=lambda c: c.em2go["energy"] if c.em2go["energy"] >= 0 else None,
     ),

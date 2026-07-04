@@ -149,6 +149,9 @@
       },
       "correction_auto": {
         "name": "Automatic correction factor (instead of manual)"
+      },
+      "phase_auto": {
+        "name": "Automatic phase switching (1↔3) in PV mode"
       }
     },
     "number": {

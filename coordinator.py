@@ -39,6 +39,9 @@ from .const import (
     REG_PHASES,
     ACTION_START,
     ACTION_STOP,
+    PHASE_CHANGE_DELAY,
+    PHASE_DOWN_WATTS,
+    PHASE_UP_WATTS,
     STATE_CHANGE_INTERVAL,
     STATE_CHANGE_OFF_DELAY,
     STATE_CHANGE_ON_DELAY,
@@ -153,7 +156,11 @@ class PVSCCoordinator:
             "ampere_deadband": 0.1,
             "surplus_mode": "load",
             "forced_ampere": 0,
+            "phase_auto": False,
         }
+        # Zeitstempel für die automatische Phasenumschaltung (Beginn der
+        # stabilen Über-/Unterschreitung der Schwellwerte)
+        self.phase_change_ts = 0.0
         self.enabled = True
         # Startzustand der Steuerung kommt aus dem Setup-Feld
         # "control_on_start" (siehe async_setup) - True bedeutet: nach
@@ -397,7 +404,7 @@ class PVSCCoordinator:
         if charging:
             message = (
                 "Wallbox: Ladung gestartet\n"
-                f"Zähler: {self.em2go['energy']:g} Wh\n"
+                f"Zähler: {self.em2go['energy']:g} kWh\n"
                 f"Strom: {self.em2go['ampere']:g} A"
             )
         else:
@@ -416,7 +423,7 @@ class PVSCCoordinator:
             message = (
                 "Wallbox: Ladung beendet\n"
                 f"Geladen: {self.em2go['loaded_kwh']:g} kWh\n"
-                f"Zähler: {self.em2go['energy']:g} Wh\n"
+                f"Zähler: {self.em2go['energy']:g} kWh\n"
                 f"Grund: {grund}"
             )
         if self.has_car_soc and self.car["soc"] >= 0:
@@ -463,7 +470,9 @@ class PVSCCoordinator:
             self.em2go["l1"] = _u32(values["l1"])
             self.em2go["l2"] = _u32(values["l2"])
             self.em2go["l3"] = _u32(values["l3"])
-            self.em2go["energy"] = _u32(values["energy"])
+            # Register 28 liefert kWh*10 (per Vergleich mit dem historischen
+            # Zählerstand verifiziert), NICHT Wh -> auf echte kWh normieren.
+            self.em2go["energy"] = _u32(values["energy"]) / 10
             # Register liefert Ampere*10 bzw. kWh*10 - hier auf die
             # einheitliche interne Darstellung (echte Ampere/kWh) umrechnen.
             self.em2go["loaded_kwh"] = values["loaded"][0] / 10
@@ -595,7 +604,13 @@ class PVSCCoordinator:
         min_a = 6 + (0 if self.state else 1)
         # Maximaler Ladestrom per Option (16 A = 11-kW-, 32 A = 22-kW-Version)
         max_a = self.entry.options.get("max_ampere", MAX_A)
-        min_watts = min_a * (em2go["phases"] if em2go["phases"] in (1, 3) else 1) * VOLT
+        # Mindestleistung für die Start/Stopp-Entscheidung: Bei aktiver
+        # Phasenautomatik zählt das 1-PHASIGE Minimum - fällt der Überschuss
+        # unter das 3-phasige Minimum, wird runtergeschaltet statt gestoppt.
+        min_phases = em2go["phases"] if em2go["phases"] in (1, 3) else 1
+        if s.get("phase_auto"):
+            min_phases = 1
+        min_watts = min_a * min_phases * VOLT
 
         # ── Überschussberechnung ────────────────────────────────────
         surplus_mode = s["surplus_mode"]
@@ -691,9 +706,38 @@ class PVSCCoordinator:
                 changes["made"] = True
                 changes["phases"] = {"old": em2go["phases"], "new": target_phases}
         else:
-            if em2go["phases"] not in (-1, 1):
+            # PV-Modus: Standard ist 1-phasig. Mit aktivierter Phasen-
+            # automatik wird während des Ladens auf 3 Phasen hochgeschaltet,
+            # wenn der Auto-Überschuss PHASE_CHANGE_DELAY lang über
+            # PHASE_UP_WATTS liegt - und zurück auf 1 Phase, wenn er so
+            # lange unter PHASE_DOWN_WATTS fällt (Hysterese gegen Flattern).
+            desired_phases = 1
+            if s.get("phase_auto") and self.state and em2go["plug"] == 1:
+                if em2go["phases"] == 3:
+                    desired_phases = 3
+                    if car_surplus < PHASE_DOWN_WATTS:
+                        if not self.phase_change_ts:
+                            self.phase_change_ts = now
+                        elif (now - self.phase_change_ts) > PHASE_CHANGE_DELAY:
+                            desired_phases = 1
+                            self.phase_change_ts = 0
+                    else:
+                        self.phase_change_ts = 0
+                else:
+                    if car_surplus > PHASE_UP_WATTS:
+                        if not self.phase_change_ts:
+                            self.phase_change_ts = now
+                        elif (now - self.phase_change_ts) > PHASE_CHANGE_DELAY:
+                            desired_phases = 3
+                            self.phase_change_ts = 0
+                    else:
+                        self.phase_change_ts = 0
+            else:
+                self.phase_change_ts = 0
+
+            if em2go["phases"] not in (-1, desired_phases):
                 changes["made"] = True
-                changes["phases"] = {"old": em2go["phases"], "new": 1}
+                changes["phases"] = {"old": em2go["phases"], "new": desired_phases}
 
         if em2go["err_limit"] != FIXED_ERR_LIMIT:
             changes["made"] = True

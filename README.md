@@ -21,7 +21,7 @@ Wichtig: Die Wallbox verträgt nur **eine** Modbus-Verbindung gleichzeitig – e
 |---|---|---|
 | Start/Stopp (Action 1/2) | 95 | Nur nach 3 Min stabiler Entscheidung, mind. 3 Min Abstand, max. 3 Schaltungen pro 15 Min |
 | Ampere (Wert × 10) | 91 | Wenn Soll ≥ Totband (0,1 A) vom Ist abweicht, 30 s stabil, mind. 30 s Abstand |
-| Phasen (1/3) | 200 | **Sofort**, sobald Ist ≠ Soll (im PV-Modus immer 1) |
+| Phasen (1/3) | 200 | **Sofort**, sobald Ist ≠ Soll (im PV-Modus 1, mit aktiver Phasenautomatik 1 oder 3) |
 | Fehler-Limit (fix 60 = 6 A) | 87 | Sofort, wenn Register ≠ 60 |
 
 **Fehlerverhalten:** Bei einem Fehler wird die Verbindung geschlossen und erst nach einem Cool-down neu aufgebaut: 10 s, verdoppelnd pro Folgefehler, max. 120 s. Ein fehlgeschlagener Schreibversuch wird nicht wiederholt, sondern beim nächsten Regelzyklus neu berechnet. Wichtig: Die EM2GO verriegelt ihren Modbus-Stack nach abrupten Verbindungsabbrüchen für einige Minuten – einzelne Reconnect-Timeouts im Log sind daher normal und heilen sich selbst.
@@ -33,6 +33,7 @@ Wichtig: Die Wallbox verträgt nur **eine** Modbus-Verbindung gleichzeitig – e
 | `switch.pvsc_control_enabled` | „Steuerung aktiv (schreibt auf Wallbox)" – **Sicherheits-Freigabe.** AN = schreibt auf die Wallbox. AUS = nur lesen/beobachten |
 | `switch.pvsc_enabled` | „Überschuss-Automatik aktiviert" – Regelung grundsätzlich an/aus (bei AUS wird nie geladen, auch im Live-Modus) |
 | `switch.pvsc_correction_auto` | „Korrekturfaktor automatisch berechnen (statt manuell)" – AN = Faktor aus Speicher-SOC. AUS = manueller Wert (`number.pvsc_correction_factor`) gilt |
+| `switch.pvsc_phase_auto` | „Automatische Phasenumschaltung (1↔3) im PV-Modus" – AN = bei Überschuss > 4,83 kW für 5 Min wird auf 3 Phasen hochgeschaltet, bei < 4,14 kW für 5 Min zurück auf 1 Phase (Hysterese). Das Stopp-Kriterium rechnet dann mit dem 1-phasigen Minimum, damit runtergeschaltet statt gestoppt wird. AUS (Standard) = im PV-Modus immer 1-phasig |
 
 ## 4. Einstellwerte (Number)
 

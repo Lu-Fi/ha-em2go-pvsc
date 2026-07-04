@@ -149,6 +149,9 @@
       },
       "correction_auto": {
         "name": "Korrekturfaktor automatisch berechnen (statt manuell)"
+      },
+      "phase_auto": {
+        "name": "Automatische Phasenumschaltung (1↔3) im PV-Modus"
       }
     },
     "number": {

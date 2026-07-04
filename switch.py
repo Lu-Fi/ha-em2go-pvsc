@@ -21,6 +21,7 @@ async def async_setup_entry(
             PVSCControlEnabledSwitch(coordinator, entry.entry_id),
             PVSCEnabledSwitch(coordinator, entry.entry_id),
             PVSCCorrectionAutoSwitch(coordinator, entry.entry_id),
+            PVSCPhaseAutoSwitch(coordinator, entry.entry_id),
         ]
     )
 
@@ -97,4 +98,36 @@ class PVSCCorrectionAutoSwitch(PVSCEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
         self.coordinator.settings["correction_auto"] = False
+        self.async_write_ha_state()
+
+
+class PVSCPhaseAutoSwitch(PVSCEntity, SwitchEntity):
+    """Optionale automatische 1<->3-Phasenumschaltung im PV-Modus.
+
+    AN: Bei dauerhaft hohem Überschuss (> PHASE_UP_WATTS für 5 Min) wird
+    auf 3 Phasen hochgeschaltet, bei dauerhaft niedrigem (< PHASE_DOWN_WATTS
+    für 5 Min) zurück auf 1 Phase. AUS (Standard): im PV-Modus immer 1-phasig.
+    """
+
+    _attr_icon = "mdi:sine-wave"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: PVSCCoordinator, entry_id: str) -> None:
+        super().__init__(coordinator, entry_id)
+        self._attr_unique_id = f"pvsc_{entry_id}_phase_auto"
+        self._attr_suggested_object_id = "pvsc_phase_auto"
+        self.entity_id = "switch.pvsc_phase_auto"
+        self._attr_translation_key = "phase_auto"
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.settings["phase_auto"]
+
+    async def async_turn_on(self, **kwargs) -> None:
+        self.coordinator.settings["phase_auto"] = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        self.coordinator.settings["phase_auto"] = False
+        self.coordinator.phase_change_ts = 0
         self.async_write_ha_state()

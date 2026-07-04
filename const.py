@@ -96,6 +96,17 @@ DEFAULT_HIGH_SOC = 90
 DEFAULT_CORRECTION_FACTOR = 75  # %
 DEFAULT_AMPERE_DEADBAND = 0.1
 
+# Automatische 1<->3-Phasenumschaltung (optional, switch.pvsc_phase_auto):
+# Hochschalten, wenn der Auto-Überschuss PHASE_CHANGE_DELAY lang über
+# PHASE_UP_WATTS liegt; runterschalten, wenn er so lange unter
+# PHASE_DOWN_WATTS fällt. PHASE_UP_WATTS liegt bewusst über dem
+# 3-phasigen Minimum (6 A x 3 x 230 V = 4140 W), damit nach dem
+# Hochschalten nicht sofort wieder runtergeschaltet werden muss.
+DEFAULT_PHASE_AUTO = False
+PHASE_CHANGE_DELAY = 5 * 60  # Sekunden stabile Über-/Unterschreitung
+PHASE_UP_WATTS = 7 * 3 * 230    # 4830 W
+PHASE_DOWN_WATTS = 6 * 3 * 230  # 4140 W
+
 # Zeitkonstanten (Sekunden) - identisch zum Node-RED Flow
 STATE_CHANGE_ON_DELAY = 3 * 60
 STATE_CHANGE_OFF_DELAY = 3 * 60
