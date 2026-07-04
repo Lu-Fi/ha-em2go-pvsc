@@ -404,7 +404,7 @@ class PVSCCoordinator:
         if charging:
             message = (
                 "Wallbox: Ladung gestartet\n"
-                f"Zähler: {self.em2go['energy']:g} kWh\n"
+                f"Zähler: {self.em2go['energy']:g} Wh\n"
                 f"Strom: {self.em2go['ampere']:g} A"
             )
         else:
@@ -423,7 +423,7 @@ class PVSCCoordinator:
             message = (
                 "Wallbox: Ladung beendet\n"
                 f"Geladen: {self.em2go['loaded_kwh']:g} kWh\n"
-                f"Zähler: {self.em2go['energy']:g} kWh\n"
+                f"Zähler: {self.em2go['energy']:g} Wh\n"
                 f"Grund: {grund}"
             )
         if self.has_car_soc and self.car["soc"] >= 0:
@@ -470,9 +470,7 @@ class PVSCCoordinator:
             self.em2go["l1"] = _u32(values["l1"])
             self.em2go["l2"] = _u32(values["l2"])
             self.em2go["l3"] = _u32(values["l3"])
-            # Register 28 liefert kWh*10 (per Vergleich mit dem historischen
-            # Zählerstand verifiziert), NICHT Wh -> auf echte kWh normieren.
-            self.em2go["energy"] = _u32(values["energy"]) / 10
+            self.em2go["energy"] = _u32(values["energy"])
             # Register liefert Ampere*10 bzw. kWh*10 - hier auf die
             # einheitliche interne Darstellung (echte Ampere/kWh) umrechnen.
             self.em2go["loaded_kwh"] = values["loaded"][0] / 10
