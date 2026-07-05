@@ -76,7 +76,11 @@
           "modbus_reconnect_backoff": "Modbus Cool-down nach Fehler, bevor neu verbunden wird (Sekunden, verdoppelt sich bei Folgefehlern)",
           "modbus_connect_settle_delay": "Modbus Pause nach frischem Verbindungsaufbau vor erster Anfrage (Sekunden)",
           "modbus_framing": "Modbus Framing: 'rtu' (rohe RTU-Rahmen, vermutlich richtig für diese Wallbox) oder 'mbap' (echtes Modbus-TCP)",
-          "max_ampere": "Maximaler Ladestrom (A, 16 bei 11-kW-, 32 bei 22-kW-Version)"
+          "max_ampere": "Maximaler Ladestrom (A, 16 bei 11-kW-, 32 bei 22-kW-Version)",
+          "state_change_on_delay": "Start delay (seconds) - how long the surplus must exceed the minimum before charging actually starts",
+          "state_change_off_delay": "Stop delay (seconds) - how long the surplus must be insufficient before charging actually stops",
+          "ampere_change_delay": "Current adjustment delay (seconds) - how long the target current must differ before the wallbox setpoint is adjusted",
+          "ampere_deadband": "Amps deadband (A) - minimum change in the target current before the wallbox setpoint is actually adjusted"
         }
       }
     }
@@ -151,6 +155,9 @@
       },
       "modbus_retry_in": {
         "name": "Modbus nächster Versuch in"
+      },
+      "modbus_errors_24h": {
+        "name": "Modbus errors (24 h)"
       }
     },
     "binary_sensor": {
@@ -197,23 +204,8 @@
       "correction_factor": {
         "name": "Korrekturfaktor (manuell)"
       },
-      "ampere_deadband": {
-        "name": "Ampere-Totband"
-      },
       "override_ampere": {
         "name": "Override: Ampere"
-      },
-      "forced_ampere": {
-        "name": "Test: erzwungene Ampere (0=aus)"
-      },
-      "state_change_on_delay": {
-        "name": "Start delay"
-      },
-      "state_change_off_delay": {
-        "name": "Stop delay"
-      },
-      "ampere_change_delay": {
-        "name": "Current adjustment delay"
       }
     },
     "select": {

@@ -112,7 +112,6 @@ DEFAULT_CORRECTION_FACTOR = 75  # %
 DEFAULT_CORRECTION_AUTO = True
 DEFAULT_AMPERE_DEADBAND = 0.1
 DEFAULT_SURPLUS_MODE = "load"
-DEFAULT_FORCED_AMPERE = 0
 DEFAULT_ENABLED = True  # switch.pvsc_enabled (Überschuss-Automatik an/aus)
 
 DEFAULT_OVERRIDE_MODE = "pv"
@@ -137,9 +136,13 @@ PHASE_DOWN_WATTS = 6 * 3 * 230  # 4140 W
 # hinterlegt ist. Einzeln als DEFAULT_*-Konstanten oben gehalten, hier nur
 # zu den Dicts zusammengefasst, die den Laufzeit-Strukturen in
 # PVSCCoordinator.__init__ (self.settings / self.override) entsprechen.
-# Hysterese-Delays (Sekunden) - seit 0.5.0b6 live einstellbar PRO WALLBOX
-# über number-Entities (Teil von settings, persistiert im Store). Werte
-# vorher im Options-Flow (0.5.0b5) bzw. fest kodiert (davor).
+# Hysterese-Delays (Sekunden) - seit 0.5.0b10 (wieder) im Options-Flow
+# ("Konfigurieren"), zusammen mit dem Ampere-Totband: das sind Parameter,
+# die nicht täglich geändert werden. Da eine Wallbox = ein Config-Eintrag
+# ist, gelten sie weiterhin pro Wallbox. Historie: fest kodiert (< 0.5.0b5),
+# Options-Flow (0.5.0b5), number-Entities (0.5.0b6-0.5.0b9). Zuvor über die
+# number-Entities gesetzte Werte wirken als Fallback weiter, bis der
+# Options-Dialog einmal gespeichert wurde (siehe coordinator._calculate()).
 DEFAULT_STATE_CHANGE_ON_DELAY = 3 * 60
 # Ursprünglich 3 Minuten wie beim Start (1:1 zum Node-RED Flow). Per
 # Nutzerwunsch auf 1 Minute reduziert: bei einem Lastspitzen-bedingten
@@ -155,13 +158,8 @@ DEFAULT_SETTINGS = {
     "high_soc": DEFAULT_HIGH_SOC,
     "correction_factor": DEFAULT_CORRECTION_FACTOR,
     "correction_auto": DEFAULT_CORRECTION_AUTO,
-    "ampere_deadband": DEFAULT_AMPERE_DEADBAND,
     "surplus_mode": DEFAULT_SURPLUS_MODE,
-    "forced_ampere": DEFAULT_FORCED_AMPERE,
     "phase_auto": DEFAULT_PHASE_AUTO,
-    "state_change_on_delay": DEFAULT_STATE_CHANGE_ON_DELAY,
-    "state_change_off_delay": DEFAULT_STATE_CHANGE_OFF_DELAY,
-    "ampere_change_delay": DEFAULT_AMPERE_CHANGE_DELAY,
 }
 DEFAULT_OVERRIDE = {
     "mode": DEFAULT_OVERRIDE_MODE,

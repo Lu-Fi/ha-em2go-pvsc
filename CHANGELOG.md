@@ -2,6 +2,21 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0b10] - 2026-07-05 (prerelease)
+
+### Changed
+
+- **Start delay, stop delay, current-adjustment delay and amps deadband** moved from number entities back into the entry's **Options dialog** ("Configure") — these are set-and-forget parameters, not daily controls. They remain per wallbox (one config entry per wallbox). Values previously set via the number entities keep working as fallback until the Options dialog is saved once; the old number entities are removed from the registry automatically.
+- "Reset to defaults" consequently no longer touches delays/deadband (they are options now).
+
+### Removed
+
+- **"Test: forced amps"** (`number.pvsc_forced_ampere`) removed entirely, including its logic in the charging calculation. For a fixed-current test, use override mode "manual" instead.
+
+### Added
+
+- New diagnostic sensor **"Modbus errors (24 h)"** (`sensor.pvsc_modbus_errors_24h`): counts real Modbus errors in the last 24 hours (cool-down ticks don't count). In-memory — resets on HA restart.
+
 ## [0.5.0b9] - 2026-07-05 (prerelease)
 
 ### Added

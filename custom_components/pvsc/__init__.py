@@ -84,6 +84,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
     _async_apply_id_prefix(hass, entry)
+    _async_remove_stale_entities(hass, entry)
 
     coordinator = PVSCCoordinator(hass, entry)
     await coordinator.async_setup()
@@ -129,6 +130,31 @@ def _async_apply_id_prefix(hass: HomeAssistant, entry: ConfigEntry) -> None:
         _LOGGER.info("PVSC: Benenne %s in %s um (id_prefix=%s)",
                      reg_entry.entity_id, desired, prefix)
         registry.async_update_entity(reg_entry.entity_id, new_entity_id=desired)
+
+
+# Entity-Keys, die in früheren Versionen als Entities existierten und
+# inzwischen entfernt wurden (0.5.0b10: Delays + Totband in den Options-Flow
+# verschoben, "Test: erzwungene Ampere" ersatzlos gestrichen). Ohne aktives
+# Aufräumen blieben sie als dauerhaft "nicht verfügbare" Registry-Leichen
+# sichtbar.
+_REMOVED_ENTITY_KEYS = {
+    "state_change_on_delay",
+    "state_change_off_delay",
+    "ampere_change_delay",
+    "ampere_deadband",
+    "forced_ampere",
+}
+
+
+def _async_remove_stale_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    registry = er.async_get(hass)
+    uid_prefix = f"pvsc_{entry.entry_id}_"
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if not reg_entry.unique_id.startswith(uid_prefix):
+            continue
+        if reg_entry.unique_id[len(uid_prefix):] in _REMOVED_ENTITY_KEYS:
+            _LOGGER.info("PVSC: Entferne veraltete Entity %s", reg_entry.entity_id)
+            registry.async_remove(reg_entry.entity_id)
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:

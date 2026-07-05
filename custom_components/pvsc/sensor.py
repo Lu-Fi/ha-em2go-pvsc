@@ -147,6 +147,12 @@ SENSORS: tuple[PVSCSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda c: c.modbus_seconds_until_retry,
     ),
+    PVSCSensorDescription(
+        key="modbus_errors_24h", name="Modbus-Fehler (24 h)",
+        icon="mdi:alert-circle-check-outline", entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda c: c.modbus_errors_24h,
+    ),
 )
 
 

@@ -11,7 +11,11 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    DEFAULT_AMPERE_CHANGE_DELAY,
+    DEFAULT_AMPERE_DEADBAND,
     DEFAULT_BATTERY_KWH,
+    DEFAULT_STATE_CHANGE_OFF_DELAY,
+    DEFAULT_STATE_CHANGE_ON_DELAY,
     DEFAULT_INVERTER_MAX_OUTPUT,
     DEFAULT_MAX_BATTERY_DISCHARGE,
     DEFAULT_MAX_LOAD,
@@ -180,6 +184,15 @@ class PVSCOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=user_input)
 
         opts = self._config_entry.options
+        # Fallback für Delays/Totband: Werte, die in 0.5.0b6-b9 über die
+        # (inzwischen entfernten) number-Entities gesetzt wurden, liegen im
+        # Store des Coordinators - sie hier als Vorbelegung anbieten, damit
+        # beim ersten Speichern des Dialogs nichts zurückspringt.
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id)
+        live = getattr(coordinator, "settings", {}) if coordinator else {}
+
+        def _eff(key: str, default):
+            return opts.get(key, live.get(key, default))
         schema = vol.Schema(
             {
                 vol.Required(
@@ -238,12 +251,28 @@ class PVSCOptionsFlow(config_entries.OptionsFlow):
                     "max_ampere",
                     default=opts.get("max_ampere", MAX_A),
                 ): vol.All(vol.Coerce(int), vol.Range(min=6, max=32)),
-                # Die Hysterese-Delays (Start-/Stopp-Verzögerung, Ampere-
-                # Anpassungsverzögerung) sind seit 0.5.0b6 KEINE Optionen
-                # mehr, sondern number-Entities pro Wallbox (number.pvsc_
-                # state_change_on_delay usw.) - bestehende Options-Werte
-                # werden beim ersten Start einmalig übernommen (siehe
-                # coordinator._async_load_persisted_state()).
+                # Hysterese-Delays und Ampere-Totband: seit 0.5.0b10 wieder
+                # hier (statt als number-Entities) - Parameter, die selten
+                # geändert werden. Pro Config-Eintrag = pro Wallbox.
+                # Mindestwerte bewusst nicht 0: kürzere Werte würden das
+                # Start-/Stopp-Verhalten zu nervös machen (Flattern) bzw. die
+                # Wallbox mit zu häufigen Schreibzugriffen belasten.
+                vol.Required(
+                    "state_change_on_delay",
+                    default=_eff("state_change_on_delay", DEFAULT_STATE_CHANGE_ON_DELAY),
+                ): vol.All(vol.Coerce(int), vol.Range(min=60, max=1800)),
+                vol.Required(
+                    "state_change_off_delay",
+                    default=_eff("state_change_off_delay", DEFAULT_STATE_CHANGE_OFF_DELAY),
+                ): vol.All(vol.Coerce(int), vol.Range(min=60, max=1800)),
+                vol.Required(
+                    "ampere_change_delay",
+                    default=_eff("ampere_change_delay", DEFAULT_AMPERE_CHANGE_DELAY),
+                ): vol.All(vol.Coerce(int), vol.Range(min=30, max=600)),
+                vol.Required(
+                    "ampere_deadband",
+                    default=_eff("ampere_deadband", DEFAULT_AMPERE_DEADBAND),
+                ): vol.All(vol.Coerce(float), vol.Range(min=0.05, max=2)),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

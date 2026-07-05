@@ -141,6 +141,10 @@ class PVSCCoordinator:
         }
         self.modbus_ok = False
         self.modbus_last_error: str | None = None
+        # Zeitstempel echter Modbus-Fehler (keine Cool-down-Ticks) für den
+        # Diagnose-Sensor "Modbus-Fehler (24 h)". Nur im Arbeitsspeicher -
+        # ein HA-Neustart setzt den Zähler zurück.
+        self._modbus_error_ts: list[float] = []
 
         # --- eigener Regel-Zustand (Äquivalent zu psc.* im Flow) ---
         self.state = False
@@ -388,19 +392,6 @@ class PVSCCoordinator:
             self.control_enabled = stored["control_enabled"]
             self._control_enabled_restored = True
 
-        # Migration 0.5.0b5 -> 0.5.0b6: Die drei Hysterese-Delays wanderten
-        # vom Options-Flow in per-Wallbox number-Entities (settings). Ein
-        # zuvor im Options-Flow eingestellter Wert wird EINMALIG übernommen -
-        # nur solange im Store noch kein eigener settings-Wert existiert
-        # (danach ist die number-Entity die alleinige Quelle).
-        for key in (
-            "state_change_on_delay",
-            "state_change_off_delay",
-            "ampere_change_delay",
-        ):
-            if key not in stored_settings and key in self.entry.options:
-                self.settings[key] = self.entry.options[key]
-
     async def async_persist_state(self) -> None:
         """Speichert die aktuellen 'live' Werte dauerhaft. Wird von den
         number/switch/select Entities nach jeder Änderung aufgerufen, damit
@@ -416,12 +407,11 @@ class PVSCCoordinator:
 
     async def async_reset_to_defaults(self) -> None:
         """Für button.pvsc_reset_defaults: setzt die live einstellbaren Werte
-        (SOC-Stufen, Korrekturfaktor, Ampere-Totband, Forced-Ampere,
-        Phasen-Automatik, Überschussmodus, Überschuss-Automatik an/aus,
-        Start-/Stopp-/Ampere-Anpassungsverzögerung sowie den
-        PV/Manuell/Stop-Override) auf die Werkseinstellungen aus
-        const.py zurück und schreibt sie sofort sichtbar in alle betroffenen
-        Entities.
+        (SOC-Stufen, Korrekturfaktor, Phasen-Automatik, Überschussmodus,
+        Überschuss-Automatik an/aus sowie den PV/Manuell/Stop-Override) auf
+        die Werkseinstellungen aus const.py zurück und schreibt sie sofort
+        sichtbar in alle betroffenen Entities. Delays und Ampere-Totband
+        liegen seit 0.5.0b10 im Options-Flow und sind hiervon nicht berührt.
 
         Bewusst AUSGENOMMEN: control_enabled (Schalter "Steuerung aktiv").
         Das ist der Sicherheits-Schalter, der echtes Schreiben auf die
@@ -473,6 +463,15 @@ class PVSCCoordinator:
     @property
     def modbus_seconds_until_retry(self) -> float:
         return round(self._modbus.seconds_until_retry, 1) if self._modbus else 0.0
+
+    @property
+    def modbus_errors_24h(self) -> int:
+        """Anzahl echter Modbus-Fehler in den letzten 24 Stunden (Cool-down-
+        Ticks zählen nicht mit - die sind nur die Folge eines bereits
+        gezählten Fehlers). Zählt seit dem letzten HA-Neustart."""
+        cutoff = time.time() - 24 * 3600
+        self._modbus_error_ts = [t for t in self._modbus_error_ts if t > cutoff]
+        return len(self._modbus_error_ts)
 
     # ------------------------------------------------------------------
     # Periodischer Tick: Wallbox-Zustand aktualisieren -> Regel-Logik ->
@@ -644,6 +643,7 @@ class PVSCCoordinator:
         except ModbusError as err:
             self.modbus_ok = False
             self.modbus_last_error = str(err)
+            self._modbus_error_ts.append(time.time())
             _LOGGER.warning("PVSC Modbus-Fehler: %s", err)
 
     async def _apply_changes(self, changes: dict) -> None:
@@ -847,10 +847,7 @@ class PVSCCoordinator:
         target_ampere = round(car_surplus / (VOLT * max(em2go["phases"], 1)) * 10) / 10
         target_ampere = min(max_a, max(min_a, target_ampere))
 
-        forced_ampere = s.get("forced_ampere", 0)
-        if forced_ampere > 0:
-            target_ampere = max_a
-        elif override_mode == "manual":
+        if override_mode == "manual":
             target_ampere = min(max_a, max(6, self.override.get("ampere", 6)))
             target_phases = self.override.get("phases", 1)
             if em2go["phases"] != target_phases:
@@ -897,7 +894,7 @@ class PVSCCoordinator:
         self.target_ampere = target_ampere
 
         target_state = (
-            (forced_ampere > 0 or override_mode == "manual" or car_surplus >= min_watts)
+            (override_mode == "manual" or car_surplus >= min_watts)
             and soc >= min_soc
             and em2go["plug"] == 1
             and (not self.has_car_location or car["location"] == "home")
@@ -907,20 +904,27 @@ class PVSCCoordinator:
         )
         self.target_state = target_state
 
-        # state_change_on_delay/off_delay und ampere_change_delay sind seit
-        # 0.5.0b6 PRO WALLBOX als number-Entities einstellbar (Teil von
-        # self.settings, persistiert im Store; vorher 0.5.0b5: Options-Flow,
-        # Migration siehe _async_load_persisted_state()). Die DEFAULT_*-
-        # Konstanten greifen nur, solange noch keine eigene Einstellung
-        # gespeichert wurde. STATE_CHANGE_INTERVAL/AMPERE_CHANGE_INTERVAL
+        # Delays und Totband kommen seit 0.5.0b10 aus dem Options-Flow
+        # ("Konfigurieren"; pro Config-Eintrag = pro Wallbox). Fallback-Kette:
+        # entry.options -> zuvor über die number-Entities (0.5.0b6-b9) im
+        # Store gespeicherter Wert -> Werkseinstellung. So bleibt ein früher
+        # eingestellter Wert wirksam, bis der Options-Dialog einmal
+        # gespeichert wird. STATE_CHANGE_INTERVAL/AMPERE_CHANGE_INTERVAL
         # bleiben bewusst fest (siehe const.py).
-        state_change_on_delay = s.get("state_change_on_delay", DEFAULT_STATE_CHANGE_ON_DELAY)
-        state_change_off_delay = s.get("state_change_off_delay", DEFAULT_STATE_CHANGE_OFF_DELAY)
-        ampere_change_delay = s.get("ampere_change_delay", DEFAULT_AMPERE_CHANGE_DELAY)
+        opts = self.entry.options
+        state_change_on_delay = opts.get(
+            "state_change_on_delay", s.get("state_change_on_delay", DEFAULT_STATE_CHANGE_ON_DELAY)
+        )
+        state_change_off_delay = opts.get(
+            "state_change_off_delay", s.get("state_change_off_delay", DEFAULT_STATE_CHANGE_OFF_DELAY)
+        )
+        ampere_change_delay = opts.get(
+            "ampere_change_delay", s.get("ampere_change_delay", DEFAULT_AMPERE_CHANGE_DELAY)
+        )
 
         state_change_delay = state_change_on_delay if target_state else state_change_off_delay
         state_change_needed = self.state != target_state or em2go["plug_changed"]
-        deadband = s["ampere_deadband"]
+        deadband = opts.get("ampere_deadband", s.get("ampere_deadband", 0.1))
         ampere_change_needed = abs(self.ampere - target_ampere) >= deadband or em2go["plug_changed"]
         state_change_allowed = (
             not self.state_change_ts
