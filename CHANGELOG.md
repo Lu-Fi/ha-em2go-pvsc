@@ -2,6 +2,12 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0b12] - 2026-07-05 (prerelease)
+
+### Added
+
+- The **integration name** shown in the UI is now localized via the top-level `title` key in the translation files (German "EM2GO Home PV-Überschussladen", English "EM2GO Home PV surplus charging"). The `manifest.json` name is now the English fallback (used in logs and non-translated contexts). Note: config-entry titles and the device name are stored values created once and are not affected by language switches — rename them via the pencil icon if desired.
+
 ## [0.5.0b11] - 2026-07-05 (prerelease)
 
 ### Added

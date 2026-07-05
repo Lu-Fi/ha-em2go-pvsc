@@ -1,6 +1,6 @@
 {
   "domain": "pvsc",
-  "name": "EM2GO Home PV-Überschussladen",
+  "name": "EM2GO Home PV Surplus Charging",
   "codeowners": [
     "@Lu-Fi"
   ],
@@ -13,5 +13,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/Lu-Fi/ha-em2go-pvsc/issues",
   "requirements": [],
-  "version": "0.5.0b11"
+  "version": "0.5.0b12"
 }
