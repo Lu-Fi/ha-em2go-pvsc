@@ -1,6 +1,7 @@
 """Config- und Options-Flow für PV Überschussladen (Test)."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import voluptuous as vol
@@ -41,6 +42,11 @@ DATA_SCHEMA = vol.Schema(
         vol.Required("modbus_host"): str,
         vol.Required("modbus_port", default=DEFAULT_MODBUS_PORT): int,
         vol.Required("modbus_unit", default=DEFAULT_MODBUS_UNIT): int,
+        # Objekt-ID-Präfix für alle Entities dieses Eintrags (z.B.
+        # sensor.<prefix>_status_text). Standard "pvsc"; bei einer zweiten
+        # Wallbox z.B. "pvsc_garage" wählen, damit die Entity-IDs beider
+        # Boxen eindeutig sind. Muss pro Eintrag einmalig sein.
+        vol.Required("id_prefix", default="pvsc"): str,
         # Sicherheit: Neue Installationen starten mit inaktiver Steuerung
         # (False) - die Integration liest dann nur und schreibt erst auf die
         # Wallbox, wenn der Nutzer das bewusst aktiviert (hier oder später
@@ -71,24 +77,50 @@ DATA_SCHEMA = vol.Schema(
 )
 
 
+_ID_PREFIX_RE = re.compile(r"^[a-z][a-z0-9_]{0,30}$")
+
+
 class PVSCConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Einrichtungs-Dialog."""
 
     VERSION = 1
 
+    def _validate_id_prefix(
+        self, user_input: dict[str, Any], own_entry_id: str | None = None
+    ) -> dict[str, str]:
+        """Prüft das Objekt-ID-Präfix: gültiger Slug und einmalig über alle
+        Einträge (außer dem eigenen bei Reconfigure)."""
+        prefix = user_input.get("id_prefix", "pvsc")
+        if not _ID_PREFIX_RE.match(prefix):
+            return {"id_prefix": "invalid_prefix"}
+        for other in self._async_current_entries():
+            if other.entry_id == own_entry_id:
+                continue
+            if other.data.get("id_prefix", "pvsc") == prefix:
+                return {"id_prefix": "prefix_in_use"}
+        return {}
+
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
         if user_input is not None:
-            await self.async_set_unique_id(
-                f"{user_input['modbus_host']}:{user_input['modbus_port']}"
-            )
-            self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title="EM2GO Home PV-Überschussladen", data=user_input
-            )
+            errors = self._validate_id_prefix(user_input)
+            if not errors:
+                await self.async_set_unique_id(
+                    f"{user_input['modbus_host']}:{user_input['modbus_port']}"
+                )
+                self._abort_if_unique_id_configured()
+                # Host im Titel, damit mehrere Wallbox-Einträge auf der
+                # Integrationsseite unterscheidbar sind (Titel ist über das
+                # Stift-Symbol jederzeit umbenennbar).
+                return self.async_create_entry(
+                    title=f"EM2GO Home PV-Überschussladen ({user_input['modbus_host']})",
+                    data=user_input,
+                )
 
         return self.async_show_form(
-            step_id="user", data_schema=DATA_SCHEMA, errors=errors
+            step_id="user",
+            data_schema=self.add_suggested_values_to_schema(DATA_SCHEMA, user_input or {}),
+            errors=errors,
         )
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None):
@@ -99,27 +131,36 @@ class PVSCConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         bleiben dabei erhalten, weil sie im Store pro entry_id liegen und
         die entry_id unverändert bleibt."""
         entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
 
         if user_input is not None:
-            new_unique_id = f"{user_input['modbus_host']}:{user_input['modbus_port']}"
-            # Duplikat-Schutz von Hand: Die unique_id ist "host:port". Ein
-            # Wechsel auf die Adresse einer ANDEREN, bereits eingerichteten
-            # Wallbox wird abgelehnt; die unveränderte eigene Adresse (oder
-            # eine ganz neue) ist erlaubt.
-            for other in self._async_current_entries():
-                if other.entry_id != entry.entry_id and other.unique_id == new_unique_id:
-                    return self.async_abort(reason="already_configured")
-            # data=user_input ersetzt entry.data KOMPLETT (kein Merge):
-            # nur so lässt sich eine optionale Entity (z.B. Auto-Sensor)
-            # durch Leeren des Feldes auch wieder ENTFERNEN. Alle übrigen
-            # Schlüssel (inkl. control_on_start) sind Teil des Formulars.
-            return self.async_update_reload_and_abort(
-                entry, unique_id=new_unique_id, data=user_input
-            )
+            errors = self._validate_id_prefix(user_input, own_entry_id=entry.entry_id)
+            if not errors:
+                new_unique_id = f"{user_input['modbus_host']}:{user_input['modbus_port']}"
+                # Duplikat-Schutz von Hand: Die unique_id ist "host:port". Ein
+                # Wechsel auf die Adresse einer ANDEREN, bereits eingerichteten
+                # Wallbox wird abgelehnt; die unveränderte eigene Adresse (oder
+                # eine ganz neue) ist erlaubt.
+                for other in self._async_current_entries():
+                    if other.entry_id != entry.entry_id and other.unique_id == new_unique_id:
+                        return self.async_abort(reason="already_configured")
+                # data=user_input ersetzt entry.data KOMPLETT (kein Merge):
+                # nur so lässt sich eine optionale Entity (z.B. Auto-Sensor)
+                # durch Leeren des Feldes auch wieder ENTFERNEN. Alle übrigen
+                # Schlüssel (inkl. control_on_start) sind Teil des Formulars.
+                # Ein geändertes id_prefix wird beim Reload von
+                # _async_apply_id_prefix() in __init__.py auf die bestehenden
+                # Entities angewendet (Registry-Umbenennung).
+                return self.async_update_reload_and_abort(
+                    entry, unique_id=new_unique_id, data=user_input
+                )
 
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=self.add_suggested_values_to_schema(DATA_SCHEMA, entry.data),
+            data_schema=self.add_suggested_values_to_schema(
+                DATA_SCHEMA, user_input or entry.data
+            ),
+            errors=errors,
         )
 
     @staticmethod

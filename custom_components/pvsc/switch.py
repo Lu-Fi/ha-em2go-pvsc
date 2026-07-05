@@ -35,8 +35,8 @@ class PVSCControlEnabledSwitch(PVSCEntity, SwitchEntity):
     def __init__(self, coordinator: PVSCCoordinator, entry_id: str) -> None:
         super().__init__(coordinator, entry_id)
         self._attr_unique_id = f"pvsc_{entry_id}_control_enabled"
-        self._attr_suggested_object_id = "pvsc_control_enabled"
-        self.entity_id = "switch.pvsc_control_enabled"
+        self._attr_suggested_object_id = f"{coordinator.id_prefix}_control_enabled"
+        self.entity_id = f"switch.{coordinator.id_prefix}_control_enabled"
         self._attr_translation_key = "control_enabled"
 
     @property
@@ -62,8 +62,8 @@ class PVSCEnabledSwitch(PVSCEntity, SwitchEntity):
     def __init__(self, coordinator: PVSCCoordinator, entry_id: str) -> None:
         super().__init__(coordinator, entry_id)
         self._attr_unique_id = f"pvsc_{entry_id}_enabled"
-        self._attr_suggested_object_id = "pvsc_enabled"
-        self.entity_id = "switch.pvsc_enabled"
+        self._attr_suggested_object_id = f"{coordinator.id_prefix}_enabled"
+        self.entity_id = f"switch.{coordinator.id_prefix}_enabled"
         self._attr_translation_key = "enabled"
 
     @property
@@ -88,8 +88,8 @@ class PVSCCorrectionAutoSwitch(PVSCEntity, SwitchEntity):
     def __init__(self, coordinator: PVSCCoordinator, entry_id: str) -> None:
         super().__init__(coordinator, entry_id)
         self._attr_unique_id = f"pvsc_{entry_id}_correction_auto"
-        self._attr_suggested_object_id = "pvsc_correction_auto"
-        self.entity_id = "switch.pvsc_correction_auto"
+        self._attr_suggested_object_id = f"{coordinator.id_prefix}_correction_auto"
+        self.entity_id = f"switch.{coordinator.id_prefix}_correction_auto"
         self._attr_translation_key = "correction_auto"
 
     @property
@@ -121,8 +121,8 @@ class PVSCPhaseAutoSwitch(PVSCEntity, SwitchEntity):
     def __init__(self, coordinator: PVSCCoordinator, entry_id: str) -> None:
         super().__init__(coordinator, entry_id)
         self._attr_unique_id = f"pvsc_{entry_id}_phase_auto"
-        self._attr_suggested_object_id = "pvsc_phase_auto"
-        self.entity_id = "switch.pvsc_phase_auto"
+        self._attr_suggested_object_id = f"{coordinator.id_prefix}_phase_auto"
+        self.entity_id = f"switch.{coordinator.id_prefix}_phase_auto"
         self._attr_translation_key = "phase_auto"
 
     @property

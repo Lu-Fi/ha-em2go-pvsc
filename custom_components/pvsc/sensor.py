@@ -166,11 +166,11 @@ class PVSCSensor(PVSCEntity, SensorEntity):
         super().__init__(coordinator, entry_id)
         self._description = description
         self._attr_unique_id = f"pvsc_{entry_id}_{description.key}"
-        self._attr_suggested_object_id = f"pvsc_{description.key}"
+        self._attr_suggested_object_id = f"{coordinator.id_prefix}_{description.key}"
         # has_entity_name + Gerätename überstimmt suggested_object_id bei der
         # Entity-ID-Vergabe - deshalb entity_id hier hart erzwingen, damit
         # Karte/Dashboard verlässlich auf sensor.pvsc_<key> zeigen können.
-        self.entity_id = f"sensor.pvsc_{description.key}"
+        self.entity_id = f"sensor.{coordinator.id_prefix}_{description.key}"
         self._attr_translation_key = description.key
         self._attr_native_unit_of_measurement = description.unit
         self._attr_icon = description.icon

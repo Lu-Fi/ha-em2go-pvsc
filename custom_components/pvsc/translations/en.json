@@ -21,7 +21,8 @@
           "car_end_entity": "Sensor: car charge end time (optional, display only)",
           "car_location_entity": "Device tracker: car location (optional - if empty, home presence is not checked)",
           "car_power_entity": "Sensor: car charging power (optional, display only)",
-          "control_on_start": "Enable control immediately after startup (writes to the wallbox)"
+          "control_on_start": "Enable control immediately after startup (writes to the wallbox)",
+          "id_prefix": "Entity ID prefix (e.g. 'pvsc'; use a distinct one per wallbox, like 'pvsc_garage')"
         }
       },
       "reconfigure": {
@@ -44,13 +45,18 @@
           "car_end_entity": "Sensor: car charge end time (optional, display only)",
           "car_location_entity": "Device tracker: car location (optional - if empty, home presence is not checked)",
           "car_power_entity": "Sensor: car charging power (optional, display only)",
-          "control_on_start": "Enable control immediately after startup (writes to the wallbox)"
+          "control_on_start": "Enable control immediately after startup (writes to the wallbox)",
+          "id_prefix": "Entity ID prefix (e.g. 'pvsc'; use a distinct one per wallbox, like 'pvsc_garage')"
         }
       }
     },
     "abort": {
       "already_configured": "Diese Wallbox ist bereits konfiguriert.",
       "reconfigure_successful": "Reconfiguration successful."
+    },
+    "error": {
+      "invalid_prefix": "Invalid prefix: use lowercase letters, digits and underscores, starting with a letter (max. 31 characters).",
+      "prefix_in_use": "This prefix is already used by another wallbox entry."
     }
   },
   "options": {

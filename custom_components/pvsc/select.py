@@ -32,8 +32,8 @@ class PVSCOverrideModeSelect(PVSCEntity, SelectEntity):
     def __init__(self, coordinator: PVSCCoordinator, entry_id: str) -> None:
         super().__init__(coordinator, entry_id)
         self._attr_unique_id = f"pvsc_{entry_id}_override_mode"
-        self._attr_suggested_object_id = "pvsc_override_mode"
-        self.entity_id = "select.pvsc_override_mode"
+        self._attr_suggested_object_id = f"{coordinator.id_prefix}_override_mode"
+        self.entity_id = f"select.{coordinator.id_prefix}_override_mode"
         self._attr_translation_key = "override_mode"
 
     @property
@@ -53,8 +53,8 @@ class PVSCOverridePhasesSelect(PVSCEntity, SelectEntity):
     def __init__(self, coordinator: PVSCCoordinator, entry_id: str) -> None:
         super().__init__(coordinator, entry_id)
         self._attr_unique_id = f"pvsc_{entry_id}_override_phases"
-        self._attr_suggested_object_id = "pvsc_override_phases"
-        self.entity_id = "select.pvsc_override_phases"
+        self._attr_suggested_object_id = f"{coordinator.id_prefix}_override_phases"
+        self.entity_id = f"select.{coordinator.id_prefix}_override_phases"
         self._attr_translation_key = "override_phases"
 
     @property
@@ -75,8 +75,8 @@ class PVSCSurplusModeSelect(PVSCEntity, SelectEntity):
     def __init__(self, coordinator: PVSCCoordinator, entry_id: str) -> None:
         super().__init__(coordinator, entry_id)
         self._attr_unique_id = f"pvsc_{entry_id}_surplus_mode"
-        self._attr_suggested_object_id = "pvsc_surplus_mode"
-        self.entity_id = "select.pvsc_surplus_mode"
+        self._attr_suggested_object_id = f"{coordinator.id_prefix}_surplus_mode"
+        self.entity_id = f"select.{coordinator.id_prefix}_surplus_mode"
         self._attr_translation_key = "surplus_mode"
 
     @property

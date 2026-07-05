@@ -12,24 +12,31 @@ class PvscCard extends HTMLElement {
   }
 
   setConfig(config) {
+    // `prefix` = Objekt-ID-Präfix des Config-Eintrags (Feld "id_prefix" im
+    // Setup/Reconfigure, Standard "pvsc"). Bei mehreren Wallboxen pro Karte
+    // das jeweilige Präfix setzen, z.B.:
+    //   type: custom:pvsc-card
+    //   prefix: pvsc_garage
+    // Einzelne *_entity-Optionen übersteuern das Präfix weiterhin.
+    const p = (config && config.prefix) || 'pvsc';
     this._config = Object.assign({
       title: 'EM2GO Home Wallbox',
-      plug_entity:            'binary_sensor.pvsc_plug_connected',
-      status_code_entity:     'sensor.pvsc_em2go_state',
-      leistung_entity:        'sensor.pvsc_em2go_power',
-      kwh_entity:             'sensor.pvsc_em2go_session_kwh',
-      target_charging_entity: 'binary_sensor.pvsc_target_charging',
-      target_ampere_entity:   'sensor.pvsc_target_ampere',
-      status_text_entity:     'sensor.pvsc_status_text',
-      control_enabled_entity: 'switch.pvsc_control_enabled',
-      override_mode_entity:   'select.pvsc_override_mode',
-      override_ampere_entity: 'number.pvsc_override_ampere',
-      override_phases_entity: 'select.pvsc_override_phases',
-      correction_factor_entity: 'number.pvsc_correction_factor',
-      correction_current_entity: 'sensor.pvsc_correction_faktor',
-      correction_auto_entity:   'switch.pvsc_correction_auto',
-      car_soc_entity:           'sensor.pvsc_car_soc',
-      car_end_entity:           'sensor.pvsc_car_end',
+      plug_entity:            `binary_sensor.${p}_plug_connected`,
+      status_code_entity:     `sensor.${p}_em2go_state`,
+      leistung_entity:        `sensor.${p}_em2go_power`,
+      kwh_entity:             `sensor.${p}_em2go_session_kwh`,
+      target_charging_entity: `binary_sensor.${p}_target_charging`,
+      target_ampere_entity:   `sensor.${p}_target_ampere`,
+      status_text_entity:     `sensor.${p}_status_text`,
+      control_enabled_entity: `switch.${p}_control_enabled`,
+      override_mode_entity:   `select.${p}_override_mode`,
+      override_ampere_entity: `number.${p}_override_ampere`,
+      override_phases_entity: `select.${p}_override_phases`,
+      correction_factor_entity: `number.${p}_correction_factor`,
+      correction_current_entity: `sensor.${p}_correction_faktor`,
+      correction_auto_entity:   `switch.${p}_correction_auto`,
+      car_soc_entity:           `sensor.${p}_car_soc`,
+      car_end_entity:           `sensor.${p}_car_end`,
     }, config);
     this._render();
   }
@@ -393,7 +400,7 @@ class PvscCard extends HTMLElement {
   getGridOptions() { return { rows: 3, min_rows: 3, columns: 12 }; }
 
   static getStubConfig() {
-    return { title: 'PV Überschussladen (Test)' };
+    return { title: 'EM2GO Home Wallbox', prefix: 'pvsc' };
   }
 }
 

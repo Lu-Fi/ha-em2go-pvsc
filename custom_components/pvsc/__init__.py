@@ -13,6 +13,7 @@ from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN, PLATFORMS
 from .coordinator import PVSCCoordinator
@@ -82,6 +83,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             data={k: v for k, v in entry.data.items() if not k.startswith("shadow_")},
         )
 
+    _async_apply_id_prefix(hass, entry)
+
     coordinator = PVSCCoordinator(hass, entry)
     await coordinator.async_setup()
     hass.data[DOMAIN][entry.entry_id] = coordinator
@@ -89,6 +92,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
+
+
+def _async_apply_id_prefix(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Wendet ein per Reconfigure geändertes Objekt-ID-Präfix (entry.data
+    ["id_prefix"], Standard "pvsc") auf die BESTEHENDEN Entities dieses
+    Eintrags an. Nötig, weil die Entity-Registry die entity_id anhand der
+    unique_id festhält - eine Änderung des Präfixes im Code allein würde
+    bereits registrierte Entities nie umbenennen.
+
+    Bewusst vorsichtig: umbenannt wird nur, wenn die aktuelle Objekt-ID noch
+    dem Schema "<irgendein_prefix>_<key>" folgt (also auf "_<key>" endet).
+    Eine von Hand frei umbenannte Entity (z.B. sensor.meine_wallbox) wird
+    nicht angefasst. Kollisionen mit bereits vergebenen IDs werden
+    übersprungen und geloggt."""
+    prefix = entry.data.get("id_prefix", "pvsc")
+    registry = er.async_get(hass)
+    uid_prefix = f"pvsc_{entry.entry_id}_"
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if not reg_entry.unique_id.startswith(uid_prefix):
+            continue
+        key = reg_entry.unique_id[len(uid_prefix):]
+        desired = f"{reg_entry.domain}.{prefix}_{key}"
+        if reg_entry.entity_id == desired:
+            continue
+        current_object_id = reg_entry.entity_id.split(".", 1)[1]
+        if not current_object_id.endswith(f"_{key}"):
+            # Von Hand umbenannt -> respektieren.
+            continue
+        if registry.async_get(desired):
+            _LOGGER.warning(
+                "PVSC: Kann %s nicht in %s umbenennen - ID bereits vergeben",
+                reg_entry.entity_id, desired,
+            )
+            continue
+        _LOGGER.info("PVSC: Benenne %s in %s um (id_prefix=%s)",
+                     reg_entry.entity_id, desired, prefix)
+        registry.async_update_entity(reg_entry.entity_id, new_entity_id=desired)
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:

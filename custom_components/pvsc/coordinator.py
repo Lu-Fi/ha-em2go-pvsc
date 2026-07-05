@@ -114,6 +114,13 @@ class PVSCCoordinator:
         self.entry = entry
         self.listeners: list[callable] = []
 
+        # Objekt-ID-Präfix für alle Entities dieses Eintrags (Standard
+        # "pvsc"). Bei mehreren Wallboxen bekommt jeder Eintrag ein eigenes
+        # Präfix (z.B. "pvsc_garage"), damit die Entity-IDs eindeutig sind
+        # statt mit _2-Suffixen zu kollidieren. Siehe config_flow (Feld
+        # id_prefix) und __init__._async_apply_id_prefix().
+        self.id_prefix: str = entry.data.get("id_prefix", "pvsc")
+
         # --- externe Messwerte (per state-change Listener aktuell gehalten) ---
         self.home = {
             "pv": -1.0, "pv1": -1.0, "charge": -1.0, "discharge": -1.0,

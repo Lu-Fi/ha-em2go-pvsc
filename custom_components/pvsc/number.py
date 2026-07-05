@@ -128,8 +128,8 @@ class PVSCNumber(PVSCEntity, NumberEntity):
         super().__init__(coordinator, entry_id)
         self._description = description
         self._attr_unique_id = f"pvsc_{entry_id}_{description.key}"
-        self._attr_suggested_object_id = f"pvsc_{description.key}"
-        self.entity_id = f"number.pvsc_{description.key}"
+        self._attr_suggested_object_id = f"{coordinator.id_prefix}_{description.key}"
+        self.entity_id = f"number.{coordinator.id_prefix}_{description.key}"
         self._attr_translation_key = description.key
         self._attr_native_min_value = description.min_value
         self._attr_native_max_value = description.max_value

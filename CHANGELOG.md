@@ -2,6 +2,18 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0b8] - 2026-07-05 (prerelease)
+
+### Added
+
+- **Multi-wallbox support**: each config entry now has an **entity ID prefix** (setup/reconfigure field `id_prefix`, default `pvsc`). A second wallbox gets its own prefix (e.g. `pvsc_garage`), so its entities become `sensor.pvsc_garage_status_text` etc. instead of colliding `_2`-suffixed IDs. The prefix must be unique across entries; changing it via Reconfigure renames the entry's existing entities in the registry (manually renamed entities are left alone).
+- New entries are titled **"EM2GO Home PV-Überschussladen (\<host\>)"** so multiple entries are distinguishable on the integrations page.
+- The bundled Lovelace card accepts a **`prefix`** option (default `pvsc`) to bind a card to a specific wallbox; individual `*_entity` options still override.
+
+### Unchanged / migration notes
+
+- Existing single-wallbox installations keep their entity IDs (`sensor.pvsc_*`): the default prefix is `pvsc` and the entity registry pins IDs by unique_id. Dashboards, automations, and the energy dashboard keep working without changes.
+
 ## [0.5.0b7] - 2026-07-05 (prerelease)
 
 ### Added

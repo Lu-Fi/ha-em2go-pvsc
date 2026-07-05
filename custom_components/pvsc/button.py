@@ -30,8 +30,8 @@ class PVSCResetStopCauseButton(PVSCEntity, ButtonEntity):
     def __init__(self, coordinator: PVSCCoordinator, entry_id: str) -> None:
         super().__init__(coordinator, entry_id)
         self._attr_unique_id = f"pvsc_{entry_id}_reset_stop_cause"
-        self._attr_suggested_object_id = "pvsc_reset_stop_cause"
-        self.entity_id = "button.pvsc_reset_stop_cause"
+        self._attr_suggested_object_id = f"{coordinator.id_prefix}_reset_stop_cause"
+        self.entity_id = f"button.{coordinator.id_prefix}_reset_stop_cause"
         self._attr_translation_key = "reset_stop_cause"
 
     async def async_press(self) -> None:
@@ -53,8 +53,8 @@ class PVSCResetDefaultsButton(PVSCEntity, ButtonEntity):
     def __init__(self, coordinator: PVSCCoordinator, entry_id: str) -> None:
         super().__init__(coordinator, entry_id)
         self._attr_unique_id = f"pvsc_{entry_id}_reset_defaults"
-        self._attr_suggested_object_id = "pvsc_reset_defaults"
-        self.entity_id = "button.pvsc_reset_defaults"
+        self._attr_suggested_object_id = f"{coordinator.id_prefix}_reset_defaults"
+        self.entity_id = f"button.{coordinator.id_prefix}_reset_defaults"
         self._attr_translation_key = "reset_defaults"
 
     async def async_press(self) -> None:

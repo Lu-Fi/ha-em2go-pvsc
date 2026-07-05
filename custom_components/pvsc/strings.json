@@ -21,7 +21,8 @@
           "car_end_entity": "Sensor: Auto-Ladeende (optional, nur Anzeige)",
           "car_location_entity": "Device Tracker: Auto-Standort (optional - wenn leer, wird nicht geprüft ob das Auto zuhause ist)",
           "car_power_entity": "Sensor: Auto-Ladeleistung (optional, nur Anzeige)",
-          "control_on_start": "Steuerung nach dem Start sofort aktiv (schreibt auf die Wallbox)"
+          "control_on_start": "Steuerung nach dem Start sofort aktiv (schreibt auf die Wallbox)",
+          "id_prefix": "Entity ID prefix (e.g. 'pvsc'; use a distinct one per wallbox, like 'pvsc_garage')"
         }
       },
       "reconfigure": {
@@ -44,13 +45,18 @@
           "car_end_entity": "Sensor: Auto-Ladeende (optional, nur Anzeige)",
           "car_location_entity": "Device Tracker: Auto-Standort (optional - wenn leer, wird nicht geprüft ob das Auto zuhause ist)",
           "car_power_entity": "Sensor: Auto-Ladeleistung (optional, nur Anzeige)",
-          "control_on_start": "Steuerung nach dem Start sofort aktiv (schreibt auf die Wallbox)"
+          "control_on_start": "Steuerung nach dem Start sofort aktiv (schreibt auf die Wallbox)",
+          "id_prefix": "Entity ID prefix (e.g. 'pvsc'; use a distinct one per wallbox, like 'pvsc_garage')"
         }
       }
     },
     "abort": {
       "already_configured": "Diese Wallbox ist bereits konfiguriert.",
       "reconfigure_successful": "Reconfiguration successful."
+    },
+    "error": {
+      "invalid_prefix": "Invalid prefix: use lowercase letters, digits and underscores, starting with a letter (max. 31 characters).",
+      "prefix_in_use": "This prefix is already used by another wallbox entry."
     }
   },
   "options": {

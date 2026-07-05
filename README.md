@@ -17,7 +17,8 @@ Home Assistant custom integration that controls an **EM2GO Home wallbox** via Mo
 - Start/stop hysteresis and current-adjustment delay, adjustable live **per wallbox** as number entities; amp ramping with deadband, rate limiting (max. 3 switch operations per 15 min)
 - Optional notifications on charge start/stop via any `notify` entity (Telegram, mobile app, …)
 - Safe observation: the wallbox state is always read via Modbus, but the integration only writes while the "Control active" switch is on — turn it off to watch and simulate decisions without touching the hardware
-- Companion Lovelace card included and auto-registered — just add a card of type `custom:pvsc-card` to any dashboard (no manual resource setup needed)
+- Companion Lovelace card included and auto-registered — just add a card of type `custom:pvsc-card` to any dashboard (no manual resource setup needed); with multiple wallboxes, set the card's `prefix` option to the entry's entity ID prefix
+- Multiple wallboxes supported: one config entry per wallbox, each with its own entity ID prefix, its own live settings, options and delays
 - Config UI and all dynamically generated texts (status, stop cause, notifications) available in German and English, following Home Assistant's system language automatically — see [Language behaviour](#language-behaviour) below
 - All "live" settings (SOC thresholds, correction factor, overrides, automation on/off, …) persist across Home Assistant restarts and integration updates, with a one-click "Reset to defaults" button
 
@@ -72,6 +73,7 @@ Set when you first add the integration (**Settings → Devices & Services → Ad
 |---|---|
 | Wallbox Modbus TCP host | IP address or hostname of the EM2GO Home wallbox. |
 | Modbus TCP port | Default `502`, the standard Modbus TCP port. |
+| Entity ID prefix | Object-ID prefix for every entity of this entry (default `pvsc` → `sensor.pvsc_status_text`, …). For a **second wallbox**, pick a distinct prefix like `pvsc_garage` so its entities get clean unique IDs instead of `_2` suffixes. Must be unique per entry. Changing it later via Reconfigure renames the entry's entities accordingly (entities you renamed by hand are left alone) — remember to update dashboards/automations that reference the old IDs. |
 | Modbus unit ID | Default and required `255` — confirmed by direct testing that the EM2GO only responds on unit 255 (unit 0 gets no response, others drop the connection). Don't change this. |
 | Enable control immediately after startup | Whether the "Control active" safety switch starts on or off right after this initial setup. Default is off (shadow mode: read-only, nothing is written to the wallbox until you flip the switch yourself). This only matters for the very first startup — from then on, whatever you've set the switch to is remembered across restarts and updates. |
 | PV power / house load / grid import / grid export sensors | **Required.** Your existing power sensors (W) that feed the surplus calculation. |
@@ -126,7 +128,7 @@ Note on the delays: an additional fixed 3-minute rate limit between two state ch
 
 ## Sensor reference (all values shown in the UI)
 
-Every sensor the integration creates, i.e. everything you can see on the device page or place on a dashboard (the bundled `custom:pvsc-card` displays a subset of these). All power/current values are refreshed every poll interval (default 7 s).
+Every sensor the integration creates, i.e. everything you can see on the device page or place on a dashboard (the bundled `custom:pvsc-card` displays a subset of these). All power/current values are refreshed every poll interval (default 7 s). Entity IDs below use the default entity ID prefix `pvsc` — with a custom prefix (multi-wallbox), substitute accordingly (e.g. `sensor.pvsc_garage_status_text`).
 
 ### Calculation sensors (own surplus logic)
 
