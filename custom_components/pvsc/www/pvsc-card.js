@@ -402,10 +402,123 @@ class PvscCard extends HTMLElement {
   static getStubConfig() {
     return { title: 'EM2GO Home Wallbox', prefix: 'pvsc' };
   }
+
+  static getConfigElement() {
+    return document.createElement('pvsc-card-editor');
+  }
+}
+
+// Grafischer Karten-Editor: Titel + Auswahl der Wallbox über deren
+// Entity-ID-Präfix. Die vorhandenen Wallboxen werden automatisch an den
+// sensor.<prefix>_em2go_state Entities erkannt (eine pro Config-Eintrag).
+// Bewusst native Formular-Elemente statt ha-* Komponenten, damit der
+// Editor ohne interne Frontend-Abhängigkeiten funktioniert.
+class PvscCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+    this._built = false;
+  }
+
+  setConfig(config) {
+    this._config = Object.assign({}, config);
+    this._build();
+    this._updateValues();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._build();
+    this._updateOptions();
+  }
+
+  _detectPrefixes() {
+    const found = new Set();
+    if (this._hass) {
+      for (const id of Object.keys(this._hass.states)) {
+        const m = id.match(/^sensor\.(.+)_em2go_state$/);
+        if (m) found.add(m[1]);
+      }
+    }
+    // Aktuell konfiguriertes Präfix immer anbieten, auch wenn (noch)
+    // keine passende Entity existiert (z.B. Integration gerade neu lädt).
+    found.add((this._config && this._config.prefix) || 'pvsc');
+    return [...found].sort();
+  }
+
+  _build() {
+    if (this._built) return;
+    this._built = true;
+    this.shadowRoot.innerHTML = `
+      <style>
+        .row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+        label { font-size: 12px; color: var(--secondary-text-color); }
+        input, select {
+          padding: 8px; font-size: 14px; color: var(--primary-text-color);
+          background: var(--card-background-color, #fff);
+          border: 1px solid var(--divider-color, rgba(0,0,0,0.2)); border-radius: 4px;
+        }
+        .hint { font-size: 11px; color: var(--secondary-text-color); }
+      </style>
+      <div class="row">
+        <label for="title">Titel</label>
+        <input id="title" type="text">
+      </div>
+      <div class="row">
+        <label for="prefix">Wallbox (Entity-ID-Präfix des Eintrags)</label>
+        <select id="prefix"></select>
+        <span class="hint">Erkannt über die vorhandenen sensor.&lt;präfix&gt;_em2go_state Entities - eine pro eingerichteter Wallbox.</span>
+      </div>
+    `;
+    this.shadowRoot.getElementById('title').addEventListener('input', (ev) => {
+      this._valueChanged('title', ev.target.value);
+    });
+    this.shadowRoot.getElementById('prefix').addEventListener('change', (ev) => {
+      this._valueChanged('prefix', ev.target.value);
+    });
+  }
+
+  _updateOptions() {
+    if (!this._built) return;
+    const select = this.shadowRoot.getElementById('prefix');
+    const current = (this._config && this._config.prefix) || 'pvsc';
+    const prefixes = this._detectPrefixes();
+    select.innerHTML = '';
+    for (const p of prefixes) {
+      const opt = document.createElement('option');
+      opt.value = p;
+      opt.textContent = p;
+      select.appendChild(opt);
+    }
+    select.value = current;
+  }
+
+  _updateValues() {
+    if (!this._built || !this._config) return;
+    const titleEl = this.shadowRoot.getElementById('title');
+    if (document.activeElement !== titleEl) {
+      titleEl.value = this._config.title || '';
+    }
+    this._updateOptions();
+  }
+
+  _valueChanged(key, value) {
+    if (!this._config) return;
+    const config = Object.assign({}, this._config);
+    if (value === '' && key === 'title') delete config.title;
+    else config[key] = value;
+    this._config = config;
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config }, bubbles: true, composed: true,
+    }));
+  }
 }
 
 if (!customElements.get('pvsc-card')) {
   customElements.define('pvsc-card', PvscCard);
+}
+if (!customElements.get('pvsc-card-editor')) {
+  customElements.define('pvsc-card-editor', PvscCardEditor);
 }
 window.customCards = window.customCards || [];
 window.customCards.push({

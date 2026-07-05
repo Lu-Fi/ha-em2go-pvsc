@@ -2,6 +2,12 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0b9] - 2026-07-05 (prerelease)
+
+### Added
+
+- The Lovelace card now has a **visual editor**: clicking "Edit" on the card shows a form with a title field and a **wallbox dropdown** (available wallboxes are auto-detected from the `sensor.<prefix>_em2go_state` entities, one per config entry) — no YAML needed to bind a card to a wallbox.
+
 ## [0.5.0b8] - 2026-07-05 (prerelease)
 
 ### Added
