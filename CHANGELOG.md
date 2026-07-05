@@ -2,6 +2,12 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0b7] - 2026-07-05 (prerelease)
+
+### Added
+
+- **Reconfigure support**: the setup values (Modbus host/IP, port, unit ID, and all sensor entities) can now be changed later via the config entry's **"Reconfigure"** menu item — no more removing and re-adding the integration. The form comes pre-filled with the current values; optional entities can be cleared to remove them. Live settings (SOC thresholds, delays, overrides, …) are preserved, since the entry keeps its identity. Switching to the address of another already-configured wallbox is rejected.
+
 ## [0.5.0b6] - 2026-07-05 (prerelease)
 
 ### Changed

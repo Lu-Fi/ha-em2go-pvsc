@@ -23,10 +23,34 @@
           "car_power_entity": "Sensor: car charging power (optional, display only)",
           "control_on_start": "Enable control immediately after startup (writes to the wallbox)"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure EM2GO Home PV surplus charging",
+        "description": "Change the Modbus connection (host/IP, port, unit ID) and the sensor entities used by the calculation. Live settings (SOC thresholds, delays, overrides, …) are kept. The integration reloads after saving.",
+        "data": {
+          "modbus_host": "Wallbox Modbus TCP host",
+          "modbus_port": "Modbus TCP port",
+          "modbus_unit": "Modbus unit ID",
+          "pv_entity": "Sensor: current total PV power (W)",
+          "pv1_entity": "Sensor: inverter PV power (W, optional)",
+          "load_entity": "Sensor: house load (W)",
+          "import_entity": "Sensor: grid import (W)",
+          "export_entity": "Sensor: grid export (W)",
+          "battery_charge_entity": "Sensor: battery charge power (W, optional)",
+          "battery_discharge_entity": "Sensor: battery discharge power (W, optional)",
+          "home_soc_entity": "Sensor: home battery SOC (%, optional - without it, no battery logic is applied)",
+          "pv_forecast_entity": "Sensor: PV forecast for the rest of the day (kWh, optional)",
+          "car_soc_entity": "Sensor: car state of charge (%, optional, display only)",
+          "car_end_entity": "Sensor: car charge end time (optional, display only)",
+          "car_location_entity": "Device tracker: car location (optional - if empty, home presence is not checked)",
+          "car_power_entity": "Sensor: car charging power (optional, display only)",
+          "control_on_start": "Enable control immediately after startup (writes to the wallbox)"
+        }
       }
     },
     "abort": {
-      "already_configured": "Diese Wallbox ist bereits konfiguriert."
+      "already_configured": "Diese Wallbox ist bereits konfiguriert.",
+      "reconfigure_successful": "Reconfiguration successful."
     }
   },
   "options": {

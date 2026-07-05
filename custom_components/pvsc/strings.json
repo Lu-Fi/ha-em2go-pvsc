@@ -23,10 +23,34 @@
           "car_power_entity": "Sensor: Auto-Ladeleistung (optional, nur Anzeige)",
           "control_on_start": "Steuerung nach dem Start sofort aktiv (schreibt auf die Wallbox)"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure EM2GO Home PV surplus charging",
+        "description": "Change the Modbus connection (host/IP, port, unit ID) and the sensor entities used by the calculation. Live settings (SOC thresholds, delays, overrides, …) are kept. The integration reloads after saving.",
+        "data": {
+          "modbus_host": "Wallbox Modbus-TCP Host",
+          "modbus_port": "Modbus-TCP Port",
+          "modbus_unit": "Modbus Unit-ID",
+          "pv_entity": "Sensor: aktuelle PV-Gesamtleistung (W)",
+          "pv1_entity": "Sensor: Wechselrichter PV-Leistung (W, optional)",
+          "load_entity": "Sensor: Hauslast (W)",
+          "import_entity": "Sensor: Netzbezug (W)",
+          "export_entity": "Sensor: Netzeinspeisung (W)",
+          "battery_charge_entity": "Sensor: Batterie-Ladeleistung (W)",
+          "battery_discharge_entity": "Sensor: Batterie-Entladeleistung (W)",
+          "home_soc_entity": "Sensor: Heimspeicher SOC (%)",
+          "pv_forecast_entity": "Sensor: PV-Prognose Rest-Tag (kWh, optional)",
+          "car_soc_entity": "Sensor: Auto-Ladezustand (%, optional, nur Anzeige)",
+          "car_end_entity": "Sensor: Auto-Ladeende (optional, nur Anzeige)",
+          "car_location_entity": "Device Tracker: Auto-Standort (optional - wenn leer, wird nicht geprüft ob das Auto zuhause ist)",
+          "car_power_entity": "Sensor: Auto-Ladeleistung (optional, nur Anzeige)",
+          "control_on_start": "Steuerung nach dem Start sofort aktiv (schreibt auf die Wallbox)"
+        }
       }
     },
     "abort": {
-      "already_configured": "Diese Wallbox ist bereits konfiguriert."
+      "already_configured": "Diese Wallbox ist bereits konfiguriert.",
+      "reconfigure_successful": "Reconfiguration successful."
     }
   },
   "options": {

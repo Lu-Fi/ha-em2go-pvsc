@@ -91,6 +91,37 @@ class PVSCConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user", data_schema=DATA_SCHEMA, errors=errors
         )
 
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None):
+        """Nachträgliches Ändern der Setup-Werte (Modbus-Host/IP, Port,
+        Unit-ID, alle Sensor-Entities) über den Menüpunkt "Neu konfigurieren"
+        am Config-Eintrag - ohne die Integration löschen und neu anlegen zu
+        müssen. Die Live-Einstellungen (SOC-Stufen, Delays, Overrides, ...)
+        bleiben dabei erhalten, weil sie im Store pro entry_id liegen und
+        die entry_id unverändert bleibt."""
+        entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            new_unique_id = f"{user_input['modbus_host']}:{user_input['modbus_port']}"
+            # Duplikat-Schutz von Hand: Die unique_id ist "host:port". Ein
+            # Wechsel auf die Adresse einer ANDEREN, bereits eingerichteten
+            # Wallbox wird abgelehnt; die unveränderte eigene Adresse (oder
+            # eine ganz neue) ist erlaubt.
+            for other in self._async_current_entries():
+                if other.entry_id != entry.entry_id and other.unique_id == new_unique_id:
+                    return self.async_abort(reason="already_configured")
+            # data=user_input ersetzt entry.data KOMPLETT (kein Merge):
+            # nur so lässt sich eine optionale Entity (z.B. Auto-Sensor)
+            # durch Leeren des Feldes auch wieder ENTFERNEN. Alle übrigen
+            # Schlüssel (inkl. control_on_start) sind Teil des Formulars.
+            return self.async_update_reload_and_abort(
+                entry, unique_id=new_unique_id, data=user_input
+            )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(DATA_SCHEMA, entry.data),
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):

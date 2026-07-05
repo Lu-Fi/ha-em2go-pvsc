@@ -64,9 +64,9 @@ Copy the `custom_components/pvsc/` folder into your Home Assistant `config/custo
 
 Settings live in three places, with different rules for changing them later.
 
-### Setup wizard (one-time)
+### Setup wizard (changeable via "Reconfigure")
 
-Set when you first add the integration (**Settings → Devices & Services → Add Integration**). There is currently no "reconfigure" step, so changing any of these later means removing and re-adding the integration.
+Set when you first add the integration (**Settings → Devices & Services → Add Integration**). Since 0.5.0b7 they can be changed later without re-adding: open the integration entry's three-dot menu → **"Reconfigure"**. The form comes pre-filled with the current values; clearing an optional entity field removes it. Live settings (SOC thresholds, delays, overrides, …) survive a reconfigure.
 
 | Setting | Description |
 |---|---|
