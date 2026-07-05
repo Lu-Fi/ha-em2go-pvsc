@@ -160,12 +160,22 @@ SWITCH_RATE_LIMIT_WINDOW = 15 * 60  # Sekunden
 
 STOP_CAUSE_NONE = 0
 STOP_CAUSE_HIGH_BATTERY_USAGE = 1
+# STOP_CAUSE_LOW_SOC: Heimspeicher-SOC ist unter die ECHTE Untergrenze
+# min_soc gefallen (nicht nur unter optimal_soc) - target_state ist in
+# diesem Fall bereits über "soc >= min_soc" in _calculate() blockiert.
 STOP_CAUSE_LOW_SOC = 2
+# STOP_CAUSE_LOW_SURPLUS: schlichter PV-Engpass - inkl. der Fälle, in denen
+# der SOC zwar zwischen min_soc und optimal_soc liegt (Batterie darf dort
+# per Policy nicht mehr aushelfen) und der PV-Überschuss allein nicht
+# reicht. Vor Version 0.5.1 wurde das fälschlich als "SOC zu niedrig"
+# gemeldet, obwohl min_soc gar nicht unterschritten war.
+STOP_CAUSE_LOW_SURPLUS = 3
 
 STOP_CAUSE_TEXT = {
     0: "Kein Abbruch",
     1: "Hohe Batterienutzung",
     2: "SOC zu niedrig",
+    3: "Zu wenig PV-Überschuss",
 }
 
 EM2GO_STATE_TEXT = {

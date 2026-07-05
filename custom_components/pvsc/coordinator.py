@@ -52,6 +52,7 @@ from .const import (
     STATE_CHANGE_ON_DELAY,
     STOP_CAUSE_HIGH_BATTERY_USAGE,
     STOP_CAUSE_LOW_SOC,
+    STOP_CAUSE_LOW_SURPLUS,
     STOP_CAUSE_NONE,
     STOP_CAUSE_TEXT,
     STORAGE_VERSION,
@@ -866,10 +867,43 @@ class PVSCCoordinator:
                     self.state_change_ts = now
                 elif state_change_allowed:
                     if target_state is False:
+                        # Abbruchgrund bestimmen. Reihenfolge/Schwellen:
+                        # 1) Hohe Batterienutzung (battery_avg > 500 W) - unabhängig
+                        #    vom SOC-Band, weil das auf eine kritisch hohe
+                        #    Entladeleistung hindeutet, die man so oder so
+                        #    sehen will.
+                        # 2) Heimspeicher-SOC unter der ECHTEN Untergrenze
+                        #    min_soc (nicht optimal_soc!) - das ist die Stufe,
+                        #    unter der laut Konfiguration gar nicht mehr
+                        #    geladen werden soll (target_state oben enthält
+                        #    dafür bereits "soc >= min_soc").
+                        # 3) Andere Gründe, warum target_state False wurde und
+                        #    die schon einen eigenen, aussagekräftigeren
+                        #    Status-Text haben (_build_status_text) - hier
+                        #    bewusst KEINEN "zu wenig PV"-Grund setzen, sonst
+                        #    wäre z.B. "Automatik deaktiviert" oder "Auto
+                        #    nicht zuhause" fälschlich als PV-Mangel gemeldet.
+                        # 4) Alles andere: schlicht zu wenig PV-Überschuss
+                        #    (inkl. Fälle, in denen soc zwischen min_soc und
+                        #    optimal_soc liegt und die Batterie deshalb nicht
+                        #    mehr aushelfen darf - siehe Antwort im Chat: das
+                        #    ist keine "SOC zu niedrig"-Situation im Sinne der
+                        #    echten Untergrenze, sondern schlicht ein PV-
+                        #    Engpass, den die Batterie-Politik nicht mehr
+                        #    ausgleicht).
                         if battery_avg > 500:
                             self.stop_cause = STOP_CAUSE_HIGH_BATTERY_USAGE
-                        elif soc < optimal_soc and battery_avg > 50:
+                        elif soc < min_soc:
                             self.stop_cause = STOP_CAUSE_LOW_SOC
+                        elif (
+                            not self.enabled
+                            or em2go["state"] == 6
+                            or (self.has_car_location and car["location"] != "home")
+                            or not core_ready
+                        ):
+                            self.stop_cause = STOP_CAUSE_NONE
+                        else:
+                            self.stop_cause = STOP_CAUSE_LOW_SURPLUS
                         self.last_ampere_change_ts = now
                         self.ampere_change_ts = 0
                         target_ampere = min_a
