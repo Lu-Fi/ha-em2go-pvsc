@@ -26,13 +26,15 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    AMPERE_CHANGE_DELAY,
     AMPERE_CHANGE_INTERVAL,
+    DEFAULT_AMPERE_CHANGE_DELAY,
     DEFAULT_ENABLED,
     DEFAULT_MODBUS_FRAMING,
     DEFAULT_NOTIFY_ENTITY,
     DEFAULT_OVERRIDE,
     DEFAULT_SETTINGS,
+    DEFAULT_STATE_CHANGE_OFF_DELAY,
+    DEFAULT_STATE_CHANGE_ON_DELAY,
     DOMAIN,
     EM2GO_STATE_TEXT_DE,
     EM2GO_STATE_TEXT_EN,
@@ -50,8 +52,6 @@ from .const import (
     PHASE_DOWN_WATTS,
     PHASE_UP_WATTS,
     STATE_CHANGE_INTERVAL,
-    STATE_CHANGE_OFF_DELAY,
-    STATE_CHANGE_ON_DELAY,
     STOP_CAUSE_HIGH_BATTERY_USAGE,
     STOP_CAUSE_LOW_SOC,
     STOP_CAUSE_LOW_SURPLUS,
@@ -887,7 +887,17 @@ class PVSCCoordinator:
         )
         self.target_state = target_state
 
-        state_change_delay = STATE_CHANGE_ON_DELAY if target_state else STATE_CHANGE_OFF_DELAY
+        # state_change_on_delay/off_delay und ampere_change_delay sind seit
+        # 0.5.0b5 per Options-Flow konfigurierbar (siehe config_flow.py). Die
+        # DEFAULT_*-Konstanten greifen nur, solange noch keine eigene
+        # Einstellung gespeichert wurde. STATE_CHANGE_INTERVAL/
+        # AMPERE_CHANGE_INTERVAL bleiben bewusst fest (siehe const.py).
+        opts = self.entry.options
+        state_change_on_delay = opts.get("state_change_on_delay", DEFAULT_STATE_CHANGE_ON_DELAY)
+        state_change_off_delay = opts.get("state_change_off_delay", DEFAULT_STATE_CHANGE_OFF_DELAY)
+        ampere_change_delay = opts.get("ampere_change_delay", DEFAULT_AMPERE_CHANGE_DELAY)
+
+        state_change_delay = state_change_on_delay if target_state else state_change_off_delay
         state_change_needed = self.state != target_state or em2go["plug_changed"]
         deadband = s["ampere_deadband"]
         ampere_change_needed = abs(self.ampere - target_ampere) >= deadband or em2go["plug_changed"]
@@ -903,7 +913,7 @@ class PVSCCoordinator:
             not self.ampere_change_ts
             or em2go["plug_changed"]
             or (
-                (now - self.ampere_change_ts) > AMPERE_CHANGE_DELAY
+                (now - self.ampere_change_ts) > ampere_change_delay
                 and (now - self.last_ampere_change_ts) > AMPERE_CHANGE_INTERVAL
             )
         )

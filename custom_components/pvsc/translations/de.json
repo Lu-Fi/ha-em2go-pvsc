@@ -46,7 +46,10 @@
           "modbus_reconnect_backoff": "Modbus Cool-down nach Fehler, bevor neu verbunden wird (Sekunden, verdoppelt sich bei Folgefehlern)",
           "modbus_connect_settle_delay": "Modbus Pause nach frischem Verbindungsaufbau vor erster Anfrage (Sekunden)",
           "modbus_framing": "Modbus Framing: 'rtu' (rohe RTU-Rahmen, vermutlich richtig für diese Wallbox) oder 'mbap' (echtes Modbus-TCP)",
-          "max_ampere": "Maximaler Ladestrom (A, 16 bei 11-kW-, 32 bei 22-kW-Version)"
+          "max_ampere": "Maximaler Ladestrom (A, 16 bei 11-kW-, 32 bei 22-kW-Version)",
+          "state_change_on_delay": "Start-Verzögerung (Sekunden) - so lange muss der Überschuss über dem Minimum liegen, bevor tatsächlich geladen wird",
+          "state_change_off_delay": "Stopp-Verzögerung (Sekunden) - so lange muss der Überschuss unzureichend sein, bevor die Ladung tatsächlich beendet wird",
+          "ampere_change_delay": "Ampere-Anpassungsverzögerung (Sekunden) - so lange muss der Ziel-Strom abweichen, bevor die Vorgabe an der Wallbox angepasst wird"
         }
       }
     }

@@ -6,8 +6,6 @@
 
 Home Assistant custom integration that controls an **EM2GO Home wallbox** via Modbus TCP for **PV surplus charging** — the wallbox charges your EV with exactly the solar power you would otherwise export to the grid.
 
-*Deutsche Beschreibung weiter unten.*
-
 ## Features
 
 - Direct local Modbus TCP control of the EM2GO Home wallbox (no cloud)
@@ -20,7 +18,8 @@ Home Assistant custom integration that controls an **EM2GO Home wallbox** via Mo
 - Optional notifications on charge start/stop via any `notify` entity (Telegram, mobile app, …)
 - Safe observation: the wallbox state is always read via Modbus, but the integration only writes while the "Control active" switch is on — turn it off to watch and simulate decisions without touching the hardware
 - Companion Lovelace card included and auto-registered — just add a card of type `custom:pvsc-card` to any dashboard (no manual resource setup needed)
-- UI: German and English
+- Config UI and all dynamically generated texts (status, stop cause, notifications) available in German and English, following Home Assistant's system language automatically — see [Language behaviour](#language-behaviour) below
+- All "live" settings (SOC thresholds, correction factor, overrides, automation on/off, …) persist across Home Assistant restarts and integration updates, with a one-click "Reset to defaults" button
 
 ## EM2GO Modbus quirks (handled by this integration)
 
@@ -57,112 +56,113 @@ These cost us some debugging, so they are documented here:
 8. **Settings → Devices & Services → Add Integration** → search for "EM2GO"
 9. Follow the setup wizard (Modbus host, sensor entities, etc.)
 
----
-
 ### Manual (without HACS)
 
 Copy the `custom_components/pvsc/` folder into your Home Assistant `config/custom_components/` directory and restart Home Assistant.
 
----
+## Settings reference
 
-## Configuration
+Settings live in three places, with different rules for changing them later.
 
-All configuration happens in the UI. During setup you choose:
+### Setup wizard (one-time)
 
-- Wallbox Modbus host/port (unit ID 255 is the default — do not change it for an EM2GO)
-- Your sensor entities: PV power, house load, grid import/export (required); home battery charge/discharge/SOC, PV forecast, car SOC/location (optional)
-- Whether control is active immediately after startup (default: off = shadow mode)
+Set when you first add the integration (**Settings → Devices & Services → Add Integration**). There is currently no "reconfigure" step, so changing any of these later means removing and re-adding the integration.
 
-Runtime tuning (gear icon → Configure): notifications, max charging current (16 A for the 11 kW model, 32 A for 22 kW), max house load, battery limits, poll interval, Modbus timing.
+| Setting | Description |
+|---|---|
+| Wallbox Modbus TCP host | IP address or hostname of the EM2GO Home wallbox. |
+| Modbus TCP port | Default `502`, the standard Modbus TCP port. |
+| Modbus unit ID | Default and required `255` — confirmed by direct testing that the EM2GO only responds on unit 255 (unit 0 gets no response, others drop the connection). Don't change this. |
+| Enable control immediately after startup | Whether the "Control active" safety switch starts on or off right after this initial setup. Default is off (shadow mode: read-only, nothing is written to the wallbox until you flip the switch yourself). This only matters for the very first startup — from then on, whatever you've set the switch to is remembered across restarts and updates. |
+| PV power / house load / grid import / grid export sensors | **Required.** Your existing power sensors (W) that feed the surplus calculation. |
+| Home battery charge power / discharge power / SOC sensors | Optional. Enables the battery-assist logic (SOC thresholds, correction factor, battery-supported charging). Without a home-SOC sensor, the whole SOC/battery logic is neutralized — the integration behaves as if there were no home battery at all (fixed correction factor, no SOC gating). |
+| PV forecast for the rest of the day (kWh) | Optional. When the forecast is low relative to the battery's remaining capacity, the SOC thresholds (`min_soc`/`optimal_soc`/`high_soc`) are temporarily tightened to 80/90/95 % to conserve the home battery. |
+| Car SOC / car charge end time / car charging power | Optional, display-only sensors — no effect on charging decisions. |
+| Car location (device tracker) | Optional. If set, charging additionally requires the tracker to report "home" — useful if your PV/load sensors can't otherwise tell whether the car is actually there. |
 
-All values set via the switch/number/select entities below (SOC thresholds, correction factor, ampere deadband, phase-switch automation, surplus mode, override mode/amps/phases, automation on/off) are persisted to storage and survive Home Assistant restarts and integration updates. Use the "Reset to defaults" button to restore them to their factory values in one step (the "Control active" safety switch is intentionally left untouched by this button).
+### Options (gear icon → "Configure", changeable anytime)
 
-## Entities
+| Setting | Description |
+|---|---|
+| Send notification on charge start/stop | Turns the `notify` message on/off. |
+| Notify entity | Target `notify.*` entity for those messages (Telegram, mobile app, …). Empty = no messages regardless of the toggle above. |
+| Maximum total house load (W) | Upper bound used together with battery-assist watts to decide whether the home battery is allowed to help — default `4200`. |
+| Battery capacity (kWh) | Your home battery's usable capacity — used only to scale the PV-forecast check above, default `6.9`. |
+| Maximum battery discharge power (W) | Safety cap: battery assist is withdrawn if the home battery's own discharge is already at/above this, default `3000`. |
+| Maximum inverter output power (W) | Only relevant if a separate inverter-PV sensor is configured; caps battery assist so combined inverter output doesn't exceed this, default `4800`. |
+| Poll interval (s) | How often the Modbus registers are read and the surplus recalculated, default `7`. |
+| Modbus timeout / command delay / reconnect backoff / connect settle delay | Low-level Modbus TCP timing, tuned to match the EM2GO's known quirks (see above) — leave these alone unless you're troubleshooting connection issues. |
+| Modbus framing | `mbap` (standard Modbus TCP, correct for the EM2GO) or `rtu` (raw RTU frames) — a test fallback, not normally needed. |
+| Maximum charging current (A) | `16` for the 11 kW wallbox, `32` for the 22 kW model. |
+| Start delay (s) | How long the surplus must exceed the minimum before charging actually starts (hysteresis against brief spikes), default `180` (3 min), range `60`–`1800` (1–30 min). |
+| Stop delay (s) | How long the surplus must be insufficient before charging actually stops, default `60` (1 min, reduced from 3 min in 0.5.0b5 — reacts faster to a genuine drop, e.g. a house-load spike, instead of holding minimum current for 3 minutes first), range `60`–`1800` (1–30 min). |
+| Current adjustment delay (s) | How long the target current must differ from the current setpoint before the wallbox is actually told to change it, default `30`, range `30`–`600` (0.5–10 min). |
 
-The integration creates a device "EM2GO Home Wallbox" with sensors (PV, load, surplus, target amps, wallbox state/power/energy, diagnostics), switches (control active, automation enabled, auto correction factor), numbers (SOC thresholds, manual correction factor, overrides), selects (override mode/phases, surplus calculation mode), a status text sensor, and buttons (reset stop cause, reset to defaults).
+Note: an additional fixed 3-minute rate limit between two state changes, and a fixed 30-second rate limit between two current adjustments, apply on top of the delays above regardless of how you configure them — see the code comments in `const.py` (`STATE_CHANGE_INTERVAL`, `AMPERE_CHANGE_INTERVAL`) if you need to change those too.
 
-The status text sensor, the stop-cause sensor, the wallbox status-text sensor, and the charge start/stop notifications follow Home Assistant's **system language** (Settings → System → General → Language) — German and English are supported, any other language falls back to German. This is independent of entity name translations (which use the usual `strings.json`/`translations` mechanism) and independent of your personal profile language, which only affects the frontend UI chrome, not these dynamically generated texts. See below for the exact wording in both languages.
+### Live entities (switches/numbers/selects — persisted, resettable)
+
+These are the entities you'll interact with day to day. Since version 0.5.0b1 their values are saved to storage and survive restarts and integration updates; the **"Reset to defaults" button** restores them to the factory values below in one step (it deliberately leaves "Control active" untouched, see below).
+
+| Entity | Description |
+|---|---|
+| Control active (`switch.pvsc_control_enabled`) | The master safety switch. While off, the integration only reads the wallbox and computes what it *would* do — nothing is written. While on, it actually starts/stops charging and adjusts current/phases. |
+| Surplus automation enabled (`switch.pvsc_enabled`) | Turns the automatic PV-surplus logic on/off; charging won't start while this is off. |
+| Automatic correction factor (`switch.pvsc_correction_auto`) | When on (default), the correction factor is derived automatically from home battery SOC (see below). When off, the manual "Correction factor" number is used instead. |
+| Automatic phase switching (`switch.pvsc_phase_auto`) | When on, the wallbox switches 1↔3 phases automatically based on sustained surplus (5 min above ~4.8 kW → 3 phases, 5 min below ~4.1 kW → back to 1 phase). Default off: always 1-phase in PV mode. |
+| Min. SOC (`number.pvsc_min_soc`, default `40 %`) | The real safety floor. Below this, charging is blocked outright and the correction factor is forced to 0 — see the [Status texts & stop-cause reference](#status-texts--stop-cause-reference) for how this is reported. |
+| Optimal SOC (`number.pvsc_optimal_soc`, default `80 %`) | Between `min_soc` and this value, charging runs on PV only — the home battery is deliberately **not** allowed to top up the car (correction factor 0.75). Above it, battery assist becomes available. |
+| High SOC (`number.pvsc_high_soc`, default `90 %`) | Above this, the correction factor goes up to 1.05 (using slightly more than the raw surplus, effectively also drawing a little from the battery), or down to 0.9 in the evening (after 15:00) if the PV forecast for the rest of the day is poor (<5 kWh), to avoid needlessly draining a battery that won't get refilled today. |
+| Correction factor (manual) (`number.pvsc_correction_factor`, default `75 %`) | Used instead of the automatic tiers above when "Automatic correction factor" is off. |
+| Amps deadband (`number.pvsc_ampere_deadband`, default `0.1 A`) | Minimum change in the target current before the wallbox setpoint is actually adjusted — avoids constant micro-adjustments. |
+| Override: amps / Override phases (`number.pvsc_override_ampere`, `select.pvsc_override_phases`) | Fixed current/phase count used only while override mode is "manual". |
+| Test: forced amps (`number.pvsc_forced_ampere`, default `0` = off) | When set above 0, forces the maximum configured current regardless of actual surplus — for testing the wallbox/wiring, not for normal use. |
+| Override mode (`select.pvsc_override_mode`) | `pv` (default, automatic PV-surplus logic), `manual` (fixed current/phases from the two settings above), or `stop` (force charging off, ignoring everything else). |
+| Surplus calculation (`select.pvsc_surplus_mode`) | `load` (default): surplus = PV power − house load, both from your configured sensors. `saldo`: surplus derived instead from grid export/import plus battery charge/discharge and the wallbox's own current draw — useful if you don't have a clean whole-house load sensor but do have reliable grid meters. Falls back to `load` automatically if any of the saldo inputs report a negative/invalid reading. |
+| Reset stop cause (`button.pvsc_reset_stop_cause`) | Clears the current stop-cause value (also happens automatically overnight, 0:00–5:00). |
+| Reset to defaults (`button.pvsc_reset_defaults`) | Resets all of the above (except "Control active") to the factory defaults listed in this table. |
+
 
 ## Status texts & stop-cause reference
 
-`sensor.pvsc_status_text` shows the current state as short plain text in German or English (see language note above), evaluated top to bottom (first match wins):
+`sensor.pvsc_status_text` shows the current state as short plain text (see [Language behaviour](#language-behaviour)), evaluated top to bottom (first match wins):
 
 | German | English | Meaning |
 |---|---|---|
 | Warte auf Sensordaten | Waiting for sensor data | At least one required core sensor (PV, load, import/export, battery, home SOC) hasn't delivered a real value yet (e.g. right after a restart). |
 | Gestoppt (Override) | Stopped (override) | The override select is set to "stop". |
 | Kein Fahrzeug angeschlossen | No vehicle connected | No car plugged in. |
-| Lädt [manuell] mit X A[, Ziel Y A] | Charging [manually] at X A[, target Y A] | Actively charging; "manuell"/"manually" if override mode is "manual"; the target current is only shown while it differs from the current one (ampere ramps up/down gradually). |
+| Lädt [manuell] mit X A[, Ziel Y A] | Charging [manually] at X A[, target Y A] | Actively charging; "manually" if override mode is "manual"; the target current is only shown while it differs from the current one (ampere ramps up/down gradually). |
 | Start geplant | Start scheduled | Conditions for charging are met, waiting out the start hysteresis (3 min) before switching on. |
-| Automatik deaktiviert | Automation disabled | The "Überschuss-Automatik" switch is off. |
-| Gestoppt: `<Grund>` | Stopped: `<reason>` | Charging just stopped; see the stop-cause table below for the reason. |
+| Automatik deaktiviert | Automation disabled | The "Surplus automation enabled" switch is off. |
+| Gestoppt: `<reason>` | Stopped: `<reason>` | Charging just stopped; see the stop-cause table below for the reason. |
 | Laden beendet | Charging finished | The wallbox itself reports the charging session as finished (state code 6). |
 | Wartet: Heimspeicher-SOC zu niedrig | Waiting: home battery SOC too low | Home battery SOC is below `min_soc`, so charging is held back by design (the true safety floor from setup). |
 | Wartet auf PV-Überschuss | Waiting for PV surplus | Everything else: simply not enough PV surplus right now. |
 
-If "Steuerung aktiv" (`switch.pvsc_control_enabled`) is off, every text is prefixed with **"Steuerung aus: "** / **"Control off: "** — the integration only reads and calculates, it isn't writing to the wallbox.
+If "Control active" (`switch.pvsc_control_enabled`) is off, every text is prefixed with **"Steuerung aus: " / "Control off: "** — the integration only reads and calculates, it isn't writing to the wallbox.
 
-`sensor.pvsc_stop_cause` (and the "Grund"/"Reason" field in charge-stop notifications) records **why charging was last stopped**, decided in this order at the moment charging switches off:
+`sensor.pvsc_stop_cause` (and the "Reason" field in charge-stop notifications) records **why charging was last stopped**, decided in this order at the moment charging switches off:
 
 | German | English | Meaning |
 |---|---|---|
 | Kein Abbruch | No stop | No stop event yet, or the stop was due to something with its own status text (automation switched off mid-charge, wallbox reported "charging finished", car left the configured location, or a core sensor dropped out) rather than a PV/battery limit. |
 | Hohe Batterienutzung | High battery usage | The home battery had been discharging heavily (>500 W average over the last 15 min) to help feed the car — considered a critical draw regardless of SOC. |
 | SOC zu niedrig | SOC too low | Home battery SOC dropped below `min_soc` — the actual configured floor below which charging is blocked outright. |
-| Zu wenig PV-Überschuss | Insufficient PV surplus | Plain and simple: not enough PV surplus to keep the car's minimum current (6 A × phases × 230 V) fed. This is also shown when SOC sits between `min_soc` and `optimal_soc` — in that band the battery is deliberately not allowed to top up the car (see below), so a shortfall there is a PV problem, not a battery-SOC problem. |
+| Zu wenig PV-Überschuss | Insufficient PV surplus | Plain and simple: not enough PV surplus to keep the car's minimum current (6 A × phases × 230 V) fed. This is also shown when SOC sits between `min_soc` and `optimal_soc` — in that band the battery is deliberately not allowed to top up the car, so a shortfall there is a PV problem, not a battery-SOC problem. |
 
-**Why the distinction matters:** before version 0.5.0b2, any shortfall while SOC was below `optimal_soc` (default 80 %, not the real floor `min_soc`, default 40 %) was reported as "SOC zu niedrig" / "SOC too low" as long as there had recently been a meaningful calculated battery contribution (`battery_avg` > 50 W). That made this label show up for what was really just a PV dip — the home battery's SOC was fine, it was simply not *allowed* (by the `min_soc`/`optimal_soc` policy) to bridge the gap. "SOC too low" is now reserved for an actual `soc < min_soc` situation; everything else that boils down to "not enough power available" is labelled "Insufficient PV surplus". Since version 0.5.0b3, both labels (and the status texts, wallbox state text, and notifications) are also available in English, following Home Assistant's system language automatically.
+Before version 0.5.0b2, any shortfall while SOC was below `optimal_soc` was reported as "SOC too low" as long as there had recently been a meaningful calculated battery contribution — even though the real floor `min_soc` wasn't actually breached. That's fixed: "SOC too low" is now reserved for an actual `soc < min_soc` situation; everything else that boils down to "not enough power available" is labelled "Insufficient PV surplus".
 
-One more subtlety worth knowing: `sensor.pvsc_battery_avg` (used for the "Hohe Batterienutzung" threshold) is a 15-minute rolling average of the *calculated* shortfall (`min_watts - car_surplus`) sampled every tick — including ticks where the SOC band already forced actual battery support back to 0. So `battery_avg` can read high even in ticks where the battery wasn't really asked to contribute; treat it as "how much extra power would have been needed", not as a literal battery discharge measurement.
+One more subtlety: `sensor.pvsc_battery_avg` (used for the "High battery usage" threshold) is a 15-minute rolling average of the *calculated* shortfall (`min_watts - car_surplus`) sampled every tick — including ticks where the SOC band already forced actual battery support back to 0. So `battery_avg` can read high even in ticks where the battery wasn't really asked to contribute; treat it as "how much extra power would have been needed", not as a literal battery discharge measurement.
 
 ## Branding
 
 The integration ships its own brand images (`custom_components/pvsc/brand/`) — supported since Home Assistant 2026.3, no `home-assistant/brands` submission required. On older HA versions the tile simply falls back to the default icon.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## Disclaimer
 
 This is a community project, not affiliated with EM2GO. You are controlling real charging hardware — use at your own risk.
-
----
-
-## Deutsch
-
-Home-Assistant-Integration für **PV-Überschussladen mit der EM2GO Home Wallbox** (lokal per Modbus TCP, keine Cloud). Der Ladestrom folgt dem PV-Überschuss; optional mit Heimspeicher-Logik (SOC-Stufen, Batterie-Unterstützung, automatischer Korrekturfaktor), funktioniert aber auch ohne Hausbatterie. Override-Modi (PV/Manuell/Stop), Ein-/Ausschalt-Hysterese, Ampere-Rampe mit Totband, Rate-Limit und optionale Benachrichtigungen bei Ladestart/-stopp über eine beliebige notify-Entity. Einrichtung komplett über die UI (deutsch/englisch); eine Lovelace-Card liegt bei.
-
-Alle über die Schalter/Zahlen/Auswahl-Entities gesetzten Werte (SOC-Stufen, Korrekturfaktor, Ampere-Totband, Phasen-Automatik, Überschussmodus, Override, Automatik an/aus) werden gespeichert und überstehen HA-Neustarts sowie Updates der Integration. Der Button "Auf Werkseinstellungen zurücksetzen" setzt sie mit einem Klick auf die Werksdefaults zurück (der Sicherheits-Schalter "Steuerung aktiv" bleibt davon bewusst unberührt).
-
-Die EM2GO-Eigenheiten (nur Unit-ID 255, Schreiben nur per FC16, nur eine Modbus-Session, mehrminütige Verriegelung nach Verbindungsabbrüchen) sind in der Integration berücksichtigt.
-
-Status-Text-Sensor, Abbruchgrund-Sensor, Wallbox-Status-Text-Sensor und die Ladestart/-stopp-Benachrichtigungen folgen der **HA-Systemsprache** (Einstellungen → System → Allgemein → Sprache) – Deutsch und Englisch werden unterstützt, jede andere Sprache fällt auf Deutsch zurück. Das ist unabhängig von der Übersetzung der Entity-Namen (die läuft über `strings.json`/`translations`) und unabhängig von deiner persönlichen Profil-Sprache, die nur die Oberfläche selbst betrifft, nicht diese dynamisch erzeugten Texte.
-
-### Status- und Abbruchgrund-Texte
-
-`sensor.pvsc_status_text` zeigt den aktuellen Zustand als kurzen Klartext auf Deutsch oder Englisch (siehe Sprachhinweis oben), von oben nach unten geprüft (der erste zutreffende Fall gewinnt):
-
-| Deutsch | Englisch | Bedeutung |
-|---|---|---|
-| Warte auf Sensordaten | Waiting for sensor data | Mindestens ein benötigter Kern-Sensor (PV, Last, Netzbezug/-einspeisung, Batterie, Heimspeicher-SOC) hat noch keinen echten Wert geliefert (z. B. direkt nach einem Neustart). |
-| Gestoppt (Override) | Stopped (override) | Der Override-Modus steht auf "stop". |
-| Kein Fahrzeug angeschlossen | No vehicle connected | Kein Auto eingesteckt. |
-| Lädt [manuell] mit X A[, Ziel Y A] | Charging [manually] at X A[, target Y A] | Lädt aktiv; "manuell"/"manually" bei Override-Modus "manual"; die Ziel-Ampere werden nur angezeigt, solange sie vom aktuellen Wert abweichen (die Rampe passt sich schrittweise an). |
-| Start geplant | Start scheduled | Ladebedingungen sind erfüllt, die Start-Hysterese (3 Min.) läuft noch ab, bevor tatsächlich eingeschaltet wird. |
-| Automatik deaktiviert | Automation disabled | Der Schalter "Überschuss-Automatik" ist aus. |
-| Gestoppt: `<Abbruchgrund>` | Stopped: `<reason>` | Ladung wurde gerade beendet; siehe Tabelle unten für den Grund. |
-| Laden beendet | Charging finished | Die Wallbox selbst meldet den Ladevorgang als abgeschlossen (Status-Code 6). |
-| Wartet: Heimspeicher-SOC zu niedrig | Waiting: home battery SOC too low | Heimspeicher-SOC liegt unter `min_soc`, Laden wird bewusst zurückgehalten (die echte Sicherheitsgrenze aus dem Setup). |
-| Wartet auf PV-Überschuss | Waiting for PV surplus | Alles andere: schlicht (noch) nicht genug PV-Überschuss. |
-
-Ist "Steuerung aktiv" (`switch.pvsc_control_enabled`) aus, wird jedem Text **"Steuerung aus: "** / **"Control off: "** vorangestellt – die Integration liest und rechnet dann nur, schreibt aber nicht auf die Wallbox.
-
-`sensor.pvsc_stop_cause` (und das Feld "Grund"/"Reason" in den Ladestopp-Benachrichtigungen) hält fest, **warum die Ladung zuletzt gestoppt wurde** – entschieden in dieser Reihenfolge in dem Moment, in dem die Ladung endet:
-
-| Deutsch | Englisch | Bedeutung |
-|---|---|---|
-| Kein Abbruch | No stop | Noch kein Stopp-Ereignis, oder der Stopp hatte einen eigenen Status-Text als Ursache (Automatik während des Ladens ausgeschaltet, Wallbox meldet "Laden beendet", Auto hat den konfigurierten Standort verlassen, oder ein Kern-Sensor ist ausgefallen) statt eines PV-/Batterie-Limits. |
-| Hohe Batterienutzung | High battery usage | Der Heimspeicher hat stark entladen (> 500 W im Schnitt der letzten 15 Min.), um das Auto mitzuversorgen – das gilt unabhängig vom SOC als kritische Belastung. |
-| SOC zu niedrig | SOC too low | Heimspeicher-SOC ist unter `min_soc` gefallen – die tatsächlich konfigurierte Untergrenze, unter der gar nicht mehr geladen wird. |
-| Zu wenig PV-Überschuss | Insufficient PV surplus | Schlicht: der PV-Überschuss reicht nicht für den Mindeststrom des Autos (6 A × Phasen × 230 V). Das gilt auch, wenn der SOC zwischen `min_soc` und `optimal_soc` liegt – in diesem Band darf die Batterie das Auto bewusst nicht mehr unterstützen (siehe unten), ein Engpass dort ist also ein PV-Problem, kein Batterie-SOC-Problem. |
-
-**Warum die Unterscheidung wichtig ist:** Vor Version 0.5.0b2 wurde jeder Engpass, während der SOC unter `optimal_soc` lag (Standard 80 %, NICHT die echte Untergrenze `min_soc`, Standard 40 %), als "SOC zu niedrig" gemeldet, sofern kurz zuvor ein nennenswerter rechnerischer Batterie-Anteil (`battery_avg` > 50 W) vorlag. Dadurch erschien "SOC zu niedrig" auch dann, wenn es eigentlich nur eine PV-Flaute war – der Heimspeicher war völlig in Ordnung, durfte laut `min_soc`/`optimal_soc`-Politik nur nicht mehr einspringen. "SOC zu niedrig" ist jetzt ausschließlich für den Fall `soc < min_soc` reserviert; alles andere, was auf "zu wenig verfügbare Leistung" hinausläuft, heißt "Zu wenig PV-Überschuss". Seit Version 0.5.0b3 gibt es diese Texte (und status_text, Wallbox-Status-Text sowie die Benachrichtigungen) auch auf Englisch, automatisch passend zur HA-Systemsprache.
-
-Noch eine Feinheit: `sensor.pvsc_battery_avg` (Basis für die "Hohe Batterienutzung"-Schwelle) ist ein gleitender 15-Minuten-Schnitt des *rechnerischen* Fehlbetrags (`min_watts - car_surplus`), der in jedem Tick erfasst wird – auch in Ticks, in denen das SOC-Band die tatsächliche Batterie-Unterstützung schon auf 0 zurückgesetzt hat. `battery_avg` kann also auch dann hoch sein, wenn die Batterie real gar nicht gebraucht wurde; eher als "wie viel zusätzliche Leistung wäre nötig gewesen" lesen, nicht als echte Entlade-Messung.

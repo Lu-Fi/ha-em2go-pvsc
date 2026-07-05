@@ -59,6 +59,13 @@ OPT_NOTIFY_ENTITY = "notify_entity"
 OPT_MAX_AMPERE = "max_ampere"
 CONF_CONTROL_ON_START = "control_on_start"
 
+# Start-/Stopp- und Ampere-Anpassungs-Hysterese (Sekunden) - seit 0.5.0b5 per
+# Options-Flow änderbar, siehe DEFAULT_STATE_CHANGE_ON_DELAY /
+# DEFAULT_STATE_CHANGE_OFF_DELAY / DEFAULT_AMPERE_CHANGE_DELAY unten.
+OPT_STATE_CHANGE_ON_DELAY = "state_change_on_delay"
+OPT_STATE_CHANGE_OFF_DELAY = "state_change_off_delay"
+OPT_AMPERE_CHANGE_DELAY = "ampere_change_delay"
+
 # Notify-Ziel für Ladestart/-stopp-Meldungen. Per Options-Flow wählbar
 # (beliebige notify-Entity, z.B. Telegram oder App-Push). Leer = keine
 # Meldungen. Bewusst KEIN vorbelegtes Ziel, damit die Integration ohne
@@ -144,11 +151,27 @@ DEFAULT_OVERRIDE = {
     "phases": DEFAULT_OVERRIDE_PHASES,
 }
 
-# Zeitkonstanten (Sekunden) - identisch zum Node-RED Flow
-STATE_CHANGE_ON_DELAY = 3 * 60
-STATE_CHANGE_OFF_DELAY = 3 * 60
+# Zeitkonstanten (Sekunden). DEFAULT_STATE_CHANGE_ON_DELAY/OFF_DELAY und
+# DEFAULT_AMPERE_CHANGE_DELAY sind seit 0.5.0b5 nur noch Fallback-Defaults für
+# den Options-Flow (siehe config_flow.py) - der tatsächlich verwendete Wert
+# kommt zur Laufzeit aus entry.options (coordinator.py).
+#
+# STATE_CHANGE_INTERVAL und AMPERE_CHANGE_INTERVAL bleiben bewusst fest
+# (nicht konfigurierbar): das ist ein zusätzliches Rate-Limit, das verhindert,
+# dass kurz nacheinander zwei Zustands-/Ampere-Änderungen passieren, selbst
+# wenn die jeweilige *_DELAY schon abgelaufen ist - z.B. blockiert es einen
+# Stopp weiterhin bis mindestens STATE_CHANGE_INTERVAL Sekunden seit der
+# letzten Zustandsänderung vergangen sind, auch wenn state_change_off_delay
+# kürzer eingestellt wurde.
+DEFAULT_STATE_CHANGE_ON_DELAY = 3 * 60
+# Ursprünglich 3 Minuten wie beim Start (1:1 zum Node-RED Flow). Per
+# Nutzerwunsch auf 1 Minute reduziert: bei einem Lastspitzen-bedingten
+# Einbruch des PV-Überschusses (Überschuss, nicht zwingend PV-Produktion!)
+# reagiert die Ladung so deutlich schneller mit einem echten Stopp, statt
+# 3 Minuten lang mit Mindeststrom weiterzuladen.
+DEFAULT_STATE_CHANGE_OFF_DELAY = 60
 STATE_CHANGE_INTERVAL = 3 * 60
-AMPERE_CHANGE_DELAY = 30
+DEFAULT_AMPERE_CHANGE_DELAY = 30
 AMPERE_CHANGE_INTERVAL = 30
 
 MIN_A = 6
