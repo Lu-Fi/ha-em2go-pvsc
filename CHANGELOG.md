@@ -2,6 +2,28 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-07-05
+
+Stable release consolidating prereleases 0.5.0b1–0.5.0b12. Highlights since 0.4.2:
+
+### Added
+
+- **Reconfigure support**: Modbus host/IP, port, unit ID and all sensor entities changeable via the entry's "Reconfigure" menu — no more remove & re-add; live settings survive.
+- **Multi-wallbox support**: per-entry entity ID prefix (`id_prefix`) for clean unique entity IDs, entry titles with host, and **priority-based load sharing** (`charge_priority`) with an optional **fleet power limit** (`fleet_max_watts`) across all boxes.
+- Lovelace card: **visual editor** with wallbox dropdown and a `prefix` option; card auto-registered.
+- New diagnostic sensor **"Modbus errors (24 h)"**; localized integration name (DE/EN); localized dynamic texts (status, stop cause, notifications) following the HA system language; optional charge start/stop notifications via any `notify` entity.
+- All live settings persist across restarts/updates, with a "Reset to defaults" button.
+- `CHANGELOG.md`, full README settings & sensor reference covering every UI value.
+
+### Changed
+
+- Start/stop/current-adjustment delays and amps deadband are **options** ("Configure"), per wallbox; default stop delay reduced to 1 minute.
+- Stop-cause reporting fixed: "SOC too low" only for a real `min_soc` breach; everything else reports "Insufficient PV surplus".
+
+### Removed
+
+- "Test: forced amps" entity and its calculation logic (use override mode "manual" instead).
+
 ## [0.5.0b12] - 2026-07-05 (prerelease)
 
 ### Added
