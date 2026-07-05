@@ -2,6 +2,12 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0b11] - 2026-07-05 (prerelease)
+
+### Added
+
+- **Priority-based load sharing between multiple wallboxes** (new options `charge_priority`, 1 = highest, and `fleet_max_watts`, 0 = off): a lower-priority box doesn't start while a higher-priority one is waiting to start, and yields first when surplus drops (its consumption counts as reclaimable for higher priorities). The optional fleet power limit caps the combined draw of all boxes — budget goes to higher priorities first and also constrains the manual override. New status texts "Waiting for higher-priority wallbox" / "Waiting: fleet power limit reached". Boxes with equal priority behave as before (independent). Single-wallbox installations are unaffected.
+
 ## [0.5.0b10] - 2026-07-05 (prerelease)
 
 ### Changed

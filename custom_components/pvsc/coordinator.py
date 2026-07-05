@@ -162,6 +162,12 @@ class PVSCCoordinator:
         self.car_surplus = 0.0
         self.correction_faktor = 0.75
         self.stop_cause = STOP_CAUSE_NONE
+        # Lastverteilungs-Flags (mehrere Wallboxen, siehe _calculate()):
+        # _prio_blocked = Start zurückgestellt, weil eine höher priorisierte
+        # Box laden will, aber noch nicht lädt; _fleet_blocked = globales
+        # Leistungslimit lässt für diese Box kein Laden zu.
+        self._prio_blocked = False
+        self._fleet_blocked = False
         self.battery = BatteryState()
         self.status_text = ""
         self.status_color = "grey"
@@ -463,6 +469,37 @@ class PVSCCoordinator:
     @property
     def modbus_seconds_until_retry(self) -> float:
         return round(self._modbus.seconds_until_retry, 1) if self._modbus else 0.0
+
+    # ------------------------------------------------------------------
+    # Lastverteilung zwischen mehreren Wallboxen (Priorität + Globallimit)
+    # ------------------------------------------------------------------
+    @property
+    def charge_priority(self) -> int:
+        """Priorität dieses Eintrags (Option charge_priority, 1 = höchste).
+        Boxen mit gleicher Priorität verhalten sich zueinander wie bisher
+        (unabhängig, keine Arbitrierung) - für Lastverteilung sollten pro
+        Eintrag unterschiedliche Werte vergeben werden."""
+        return int(self.entry.options.get("charge_priority", 1))
+
+    def _peer_coordinators(self) -> list["PVSCCoordinator"]:
+        """Alle anderen aktuell geladenen Wallbox-Einträge."""
+        return [
+            c
+            for c in self.hass.data.get(DOMAIN, {}).values()
+            if c is not self and isinstance(c, PVSCCoordinator)
+        ]
+
+    def _effective_fleet_limit(self) -> int:
+        """Globales Leistungslimit über ALLE Wallboxen (W, 0 = aus). Da
+        Optionen pro Eintrag gespeichert werden, gilt der KLEINSTE
+        konfigurierte Wert (>0) aller geladenen Einträge - am besten in
+        allen Einträgen denselben Wert setzen."""
+        limits = [
+            int(c.entry.options.get("fleet_max_watts", 0))
+            for c in (self, *self._peer_coordinators())
+        ]
+        limits = [lim for lim in limits if lim > 0]
+        return min(limits) if limits else 0
 
     @property
     def modbus_errors_24h(self) -> int:
@@ -891,10 +928,55 @@ class PVSCCoordinator:
             changes["made"] = True
             changes["err_limit"] = {"old": em2go["err_limit"], "new": FIXED_ERR_LIMIT}
 
+        # ── Lastverteilung zwischen mehreren Wallboxen ──────────────
+        # Jede Box rechnet ihren Überschuss nur um die EIGENE Leistung
+        # bereinigt - Boxen an denselben Quell-Sensoren konkurrieren also von
+        # Natur aus. Die Arbitrierung macht daraus eine geordnete Verteilung:
+        peers = self._peer_coordinators()
+        my_prio = self.charge_priority
+        higher = [p for p in peers if p.charge_priority < my_prio]
+        lower = [p for p in peers if p.charge_priority > my_prio]
+
+        # 1) Rückholbarer Überschuss: Was NIEDRIGER priorisierte Boxen gerade
+        # verbrauchen, zählt für die Start-/Stopp-Entscheidung dieser Box als
+        # verfügbar. Bei Engpass hält diese Box dadurch ihr target_state,
+        # während die niedrigere das Defizit sieht und zuerst stoppt - erst
+        # dann fließt die Leistung real hierher (Ampere folgen dem gemessenen
+        # Überschuss, nicht dem rückholbaren).
+        reclaimable = sum(max(p.em2go["power"], 0.0) for p in lower)
+
+        # 2) Startsperre: Will eine HÖHER priorisierte Box laden (target_state),
+        # lädt aber noch nicht (Start-Hysterese läuft), startet diese Box
+        # nicht - sonst schnappen sich beide gleichzeitig denselben
+        # Überschuss und takten sich anschließend gegenseitig herunter.
+        # Gilt nur im PV-Modus; ein manueller Override ist eine bewusste
+        # Nutzerentscheidung.
+        self._prio_blocked = override_mode != "manual" and any(
+            p.target_state and not p.state for p in higher
+        )
+
+        # 3) Globales Leistungslimit (Option fleet_max_watts, kleinster
+        # konfigurierter Wert aller Einträge, 0 = aus): Budget dieser Box =
+        # Limit minus aktueller Leistung aller HÖHER priorisierten Boxen -
+        # die höchste Priorität bekommt ihr Budget zuerst. Gilt bewusst AUCH
+        # im manuellen Override (Sicherheitsgrenze vor Komfort).
+        self._fleet_blocked = False
+        fleet_limit = self._effective_fleet_limit()
+        if fleet_limit > 0:
+            higher_power = sum(max(p.em2go["power"], 0.0) for p in higher)
+            budget = fleet_limit - higher_power
+            budget_a = int(budget / (VOLT * max(em2go["phases"], 1)) * 10) / 10
+            if budget_a < min_a:
+                self._fleet_blocked = True
+            elif budget_a < target_ampere:
+                target_ampere = budget_a
+
         self.target_ampere = target_ampere
 
         target_state = (
-            (override_mode == "manual" or car_surplus >= min_watts)
+            (override_mode == "manual" or (car_surplus + reclaimable) >= min_watts)
+            and not self._prio_blocked
+            and not self._fleet_blocked
             and soc >= min_soc
             and em2go["plug"] == 1
             and (not self.has_car_location or car["location"] == "home")
@@ -1067,6 +1149,18 @@ class PVSCCoordinator:
             text = "Start scheduled" if en else "Start geplant"
         elif not self.enabled:
             text = "Automation disabled" if en else "Automatik deaktiviert"
+        elif self._fleet_blocked:
+            text = (
+                "Waiting: fleet power limit reached"
+                if en
+                else "Wartet: globales Leistungslimit erreicht"
+            )
+        elif self._prio_blocked:
+            text = (
+                "Waiting for higher-priority wallbox"
+                if en
+                else "Wartet auf Wallbox mit höherer Priorität"
+            )
         elif self.stop_cause:
             text = (
                 f"Stopped: {self.stop_cause_text}" if en else f"Gestoppt: {self.stop_cause_text}"

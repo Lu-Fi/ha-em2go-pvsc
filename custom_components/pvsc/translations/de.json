@@ -80,7 +80,9 @@
           "state_change_on_delay": "Start-Verzögerung (Sekunden) - so lange muss der Überschuss über dem Minimum liegen, bevor tatsächlich geladen wird",
           "state_change_off_delay": "Stopp-Verzögerung (Sekunden) - so lange muss der Überschuss unzureichend sein, bevor die Ladung tatsächlich beendet wird",
           "ampere_change_delay": "Ampere-Anpassungsverzögerung (Sekunden) - so lange muss der Ziel-Strom abweichen, bevor die Vorgabe an der Wallbox angepasst wird",
-          "ampere_deadband": "Ampere-Totband (A) - Mindeständerung des Ziel-Stroms, bevor die Vorgabe an der Wallbox tatsächlich angepasst wird"
+          "ampere_deadband": "Ampere-Totband (A) - Mindeständerung des Ziel-Stroms, bevor die Vorgabe an der Wallbox tatsächlich angepasst wird",
+          "charge_priority": "Ladepriorität bei mehreren Wallboxen (1 = höchste; eine niedriger priorisierte Box startet nur, wenn keine höher priorisierte auf ihren Start wartet, und gibt bei Engpass zuerst ab)",
+          "fleet_max_watts": "Globales Leistungslimit über ALLE Wallboxen (W, 0 = aus; der kleinste in einem Eintrag konfigurierte Wert gilt; deckelt auch den manuellen Override)"
         }
       }
     }

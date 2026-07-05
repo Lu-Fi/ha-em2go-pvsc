@@ -273,6 +273,18 @@ class PVSCOptionsFlow(config_entries.OptionsFlow):
                     "ampere_deadband",
                     default=_eff("ampere_deadband", DEFAULT_AMPERE_DEADBAND),
                 ): vol.All(vol.Coerce(float), vol.Range(min=0.05, max=2)),
+                # Lastverteilung bei mehreren Wallboxen (siehe coordinator.py,
+                # Abschnitt "Lastverteilung"): Priorität 1 = höchste; das
+                # Globallimit gilt über alle Boxen zusammen (kleinster
+                # konfigurierter Wert aller Einträge zählt, 0 = aus).
+                vol.Required(
+                    "charge_priority",
+                    default=opts.get("charge_priority", 1),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=10)),
+                vol.Required(
+                    "fleet_max_watts",
+                    default=opts.get("fleet_max_watts", 0),
+                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=50000)),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

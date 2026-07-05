@@ -100,8 +100,20 @@ Set when you first add the integration (**Settings → Devices & Services → Ad
 | Stop delay (s) | How long the surplus must be insufficient before charging actually stops, default `60` (1 min), range `60`–`1800`. |
 | Current adjustment delay (s) | How long the target current must differ from the current setpoint before the wallbox is actually told to change it, default `30`, range `30`–`600`. |
 | Amps deadband (A) | Minimum change in the target current before the wallbox setpoint is actually adjusted — avoids constant micro-adjustments. Default `0.1`, range `0.05`–`2`. |
+| Charging priority | Only relevant with multiple wallboxes — see [Load sharing](#load-sharing-between-multiple-wallboxes). `1` = highest, default `1`. |
+| Fleet power limit (W) | Optional cap on the combined power of **all** wallboxes, `0` = off. See [Load sharing](#load-sharing-between-multiple-wallboxes). |
 
 Notes: an additional fixed 3-minute rate limit between two state changes, and a fixed 30-second rate limit between two current adjustments, apply on top of the delays above regardless of how you configure them (`STATE_CHANGE_INTERVAL`, `AMPERE_CHANGE_INTERVAL` in `const.py`). Between 0.5.0b6 and 0.5.0b9 the delays and deadband were number entities; values set there keep working as fallback until the Options dialog is saved once, and the old number entities are cleaned up automatically.
+
+### Load sharing between multiple wallboxes
+
+With several wallboxes fed by the same PV/load/grid sensors, each entry computes its surplus with only its **own** wallbox power removed — so the boxes naturally compete for the same surplus without double-counting it. Since 0.5.0b11 this competition is arbitrated via the **Charging priority** option (1 = highest):
+
+- **Start order:** a lower-priority box does not start while a higher-priority box wants to charge but hasn't started yet (its start hysteresis is still running). Status shows *"Waiting for higher-priority wallbox"*.
+- **Yield order:** power currently drawn by lower-priority boxes counts as *reclaimable* for a higher-priority box's start/stop decision. When surplus drops, the lower-priority box sees the deficit and stops first (after its stop delay); the higher-priority box holds on and picks up the freed power as its measured surplus recovers.
+- **Fleet power limit:** optional cap (W) on the combined draw of all wallboxes; the budget goes to higher priorities first, and it also caps the manual override (safety before convenience). Status shows *"Waiting: fleet power limit reached"* when a box gets no budget. Since options are stored per entry, the **lowest** value configured on any entry applies — best set the same value everywhere.
+
+Boxes with equal priority behave like before (independent, first-come-first-served). Priority arbitration applies only in PV mode; a manual override is a deliberate user decision and is only constrained by the fleet limit.
 
 ### Live entities (switches/numbers/selects — persisted, resettable)
 

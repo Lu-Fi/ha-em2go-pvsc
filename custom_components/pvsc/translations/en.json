@@ -80,7 +80,9 @@
           "state_change_on_delay": "Start delay (seconds) - how long the surplus must exceed the minimum before charging actually starts",
           "state_change_off_delay": "Stop delay (seconds) - how long the surplus must be insufficient before charging actually stops",
           "ampere_change_delay": "Current adjustment delay (seconds) - how long the target current must differ before the wallbox setpoint is adjusted",
-          "ampere_deadband": "Amps deadband (A) - minimum change in the target current before the wallbox setpoint is actually adjusted"
+          "ampere_deadband": "Amps deadband (A) - minimum change in the target current before the wallbox setpoint is actually adjusted",
+          "charge_priority": "Charging priority with multiple wallboxes (1 = highest; a lower-priority box only starts when no higher-priority box is waiting to start, and yields first when surplus drops)",
+          "fleet_max_watts": "Fleet power limit across ALL wallboxes (W, 0 = off; the lowest value configured on any entry applies; also caps manual override)"
         }
       }
     }
