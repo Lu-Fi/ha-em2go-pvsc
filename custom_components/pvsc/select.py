@@ -43,6 +43,7 @@ class PVSCOverrideModeSelect(PVSCEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         self.coordinator.override["mode"] = option
         self.async_write_ha_state()
+        await self.coordinator.async_persist_state()
 
 
 class PVSCOverridePhasesSelect(PVSCEntity, SelectEntity):
@@ -63,6 +64,7 @@ class PVSCOverridePhasesSelect(PVSCEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         self.coordinator.override["phases"] = int(option)
         self.async_write_ha_state()
+        await self.coordinator.async_persist_state()
 
 
 class PVSCSurplusModeSelect(PVSCEntity, SelectEntity):
@@ -84,3 +86,4 @@ class PVSCSurplusModeSelect(PVSCEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         self.coordinator.settings["surplus_mode"] = option
         self.async_write_ha_state()
+        await self.coordinator.async_persist_state()

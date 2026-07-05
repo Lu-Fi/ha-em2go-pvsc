@@ -75,9 +75,11 @@ All configuration happens in the UI. During setup you choose:
 
 Runtime tuning (gear icon → Configure): notifications, max charging current (16 A for the 11 kW model, 32 A for 22 kW), max house load, battery limits, poll interval, Modbus timing.
 
+All values set via the switch/number/select entities below (SOC thresholds, correction factor, ampere deadband, phase-switch automation, surplus mode, override mode/amps/phases, automation on/off) are persisted to storage and survive Home Assistant restarts and integration updates. Use the "Reset to defaults" button to restore them to their factory values in one step (the "Control active" safety switch is intentionally left untouched by this button).
+
 ## Entities
 
-The integration creates a device "EM2GO Home Wallbox" with sensors (PV, load, surplus, target amps, wallbox state/power/energy, diagnostics), switches (control active, automation enabled, auto correction factor), numbers (SOC thresholds, manual correction factor, overrides), selects (override mode/phases, surplus calculation mode) and a status text sensor.
+The integration creates a device "EM2GO Home Wallbox" with sensors (PV, load, surplus, target amps, wallbox state/power/energy, diagnostics), switches (control active, automation enabled, auto correction factor), numbers (SOC thresholds, manual correction factor, overrides), selects (override mode/phases, surplus calculation mode), a status text sensor, and buttons (reset stop cause, reset to defaults).
 
 Note: the status text sensor and notification messages are currently German.
 
@@ -94,5 +96,7 @@ This is a community project, not affiliated with EM2GO. You are controlling real
 ## Deutsch
 
 Home-Assistant-Integration für **PV-Überschussladen mit der EM2GO Home Wallbox** (lokal per Modbus TCP, keine Cloud). Der Ladestrom folgt dem PV-Überschuss; optional mit Heimspeicher-Logik (SOC-Stufen, Batterie-Unterstützung, automatischer Korrekturfaktor), funktioniert aber auch ohne Hausbatterie. Override-Modi (PV/Manuell/Stop), Ein-/Ausschalt-Hysterese, Ampere-Rampe mit Totband, Rate-Limit und optionale Benachrichtigungen bei Ladestart/-stopp über eine beliebige notify-Entity. Einrichtung komplett über die UI (deutsch/englisch); eine Lovelace-Card liegt bei.
+
+Alle über die Schalter/Zahlen/Auswahl-Entities gesetzten Werte (SOC-Stufen, Korrekturfaktor, Ampere-Totband, Phasen-Automatik, Überschussmodus, Override, Automatik an/aus) werden gespeichert und überstehen HA-Neustarts sowie Updates der Integration. Der Button "Auf Werkseinstellungen zurücksetzen" setzt sie mit einem Klick auf die Werksdefaults zurück (der Sicherheits-Schalter "Steuerung aktiv" bleibt davon bewusst unberührt).
 
 Die EM2GO-Eigenheiten (nur Unit-ID 255, Schreiben nur per FC16, nur eine Modbus-Session, mehrminütige Verriegelung nach Verbindungsabbrüchen) sind in der Integration berücksichtigt.

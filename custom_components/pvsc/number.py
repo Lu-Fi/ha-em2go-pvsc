@@ -114,3 +114,4 @@ class PVSCNumber(PVSCEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         self._description.setter(self.coordinator, value)
         self.async_write_ha_state()
+        await self.coordinator.async_persist_state()

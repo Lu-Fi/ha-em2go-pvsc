@@ -46,10 +46,12 @@ class PVSCControlEnabledSwitch(PVSCEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs) -> None:
         self.coordinator.control_enabled = True
         self.async_write_ha_state()
+        await self.coordinator.async_persist_state()
 
     async def async_turn_off(self, **kwargs) -> None:
         self.coordinator.control_enabled = False
         self.async_write_ha_state()
+        await self.coordinator.async_persist_state()
 
 
 class PVSCEnabledSwitch(PVSCEntity, SwitchEntity):
@@ -71,10 +73,12 @@ class PVSCEnabledSwitch(PVSCEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs) -> None:
         self.coordinator.enabled = True
         self.async_write_ha_state()
+        await self.coordinator.async_persist_state()
 
     async def async_turn_off(self, **kwargs) -> None:
         self.coordinator.enabled = False
         self.async_write_ha_state()
+        await self.coordinator.async_persist_state()
 
 
 class PVSCCorrectionAutoSwitch(PVSCEntity, SwitchEntity):
@@ -95,10 +99,12 @@ class PVSCCorrectionAutoSwitch(PVSCEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs) -> None:
         self.coordinator.settings["correction_auto"] = True
         self.async_write_ha_state()
+        await self.coordinator.async_persist_state()
 
     async def async_turn_off(self, **kwargs) -> None:
         self.coordinator.settings["correction_auto"] = False
         self.async_write_ha_state()
+        await self.coordinator.async_persist_state()
 
 
 class PVSCPhaseAutoSwitch(PVSCEntity, SwitchEntity):
@@ -126,8 +132,10 @@ class PVSCPhaseAutoSwitch(PVSCEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs) -> None:
         self.coordinator.settings["phase_auto"] = True
         self.async_write_ha_state()
+        await self.coordinator.async_persist_state()
 
     async def async_turn_off(self, **kwargs) -> None:
         self.coordinator.settings["phase_auto"] = False
         self.coordinator.phase_change_ts = 0
         self.async_write_ha_state()
+        await self.coordinator.async_persist_state()

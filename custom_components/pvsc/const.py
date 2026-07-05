@@ -14,6 +14,11 @@ from __future__ import annotations
 DOMAIN = "pvsc"
 PLATFORMS = ["sensor", "binary_sensor", "switch", "number", "select", "button"]
 
+# Version des persistierten "live" Zustands (Store-Helper). Bei inkompatiblen
+# Änderungen am gespeicherten Schema hochzählen und ggf. async_migrate_func
+# im Store ergänzen.
+STORAGE_VERSION = 1
+
 # ---------------------------------------------------------------------------
 # Config-Entry Keys (beim Einrichten festgelegt, änderbar über "Konfigurieren")
 # ---------------------------------------------------------------------------
@@ -94,7 +99,15 @@ DEFAULT_MIN_SOC = 40
 DEFAULT_OPTIMAL_SOC = 80
 DEFAULT_HIGH_SOC = 90
 DEFAULT_CORRECTION_FACTOR = 75  # %
+DEFAULT_CORRECTION_AUTO = True
 DEFAULT_AMPERE_DEADBAND = 0.1
+DEFAULT_SURPLUS_MODE = "load"
+DEFAULT_FORCED_AMPERE = 0
+DEFAULT_ENABLED = True  # switch.pvsc_enabled (Überschuss-Automatik an/aus)
+
+DEFAULT_OVERRIDE_MODE = "pv"
+DEFAULT_OVERRIDE_AMPERE = 6
+DEFAULT_OVERRIDE_PHASES = 1
 
 # Automatische 1<->3-Phasenumschaltung (optional, switch.pvsc_phase_auto):
 # Hochschalten, wenn der Auto-Überschuss PHASE_CHANGE_DELAY lang über
@@ -106,6 +119,30 @@ DEFAULT_PHASE_AUTO = False
 PHASE_CHANGE_DELAY = 5 * 60  # Sekunden stabile Über-/Unterschreitung
 PHASE_UP_WATTS = 7 * 3 * 230    # 4830 W
 PHASE_DOWN_WATTS = 6 * 3 * 230  # 4140 W
+
+# Werkseinstellungen für die "live" number/switch/select Werte. Werden beim
+# ersten Start eines Config-Entries verwendet, beim "Reset to Default"-Button
+# (button.pvsc_reset_defaults) sowie als Fallback, falls im Store (siehe
+# coordinator.PVSCCoordinator._store) noch kein Wert für einen Schlüssel
+# hinterlegt ist. Einzeln als DEFAULT_*-Konstanten oben gehalten, hier nur
+# zu den Dicts zusammengefasst, die den Laufzeit-Strukturen in
+# PVSCCoordinator.__init__ (self.settings / self.override) entsprechen.
+DEFAULT_SETTINGS = {
+    "min_soc": DEFAULT_MIN_SOC,
+    "optimal_soc": DEFAULT_OPTIMAL_SOC,
+    "high_soc": DEFAULT_HIGH_SOC,
+    "correction_factor": DEFAULT_CORRECTION_FACTOR,
+    "correction_auto": DEFAULT_CORRECTION_AUTO,
+    "ampere_deadband": DEFAULT_AMPERE_DEADBAND,
+    "surplus_mode": DEFAULT_SURPLUS_MODE,
+    "forced_ampere": DEFAULT_FORCED_AMPERE,
+    "phase_auto": DEFAULT_PHASE_AUTO,
+}
+DEFAULT_OVERRIDE = {
+    "mode": DEFAULT_OVERRIDE_MODE,
+    "ampere": DEFAULT_OVERRIDE_AMPERE,
+    "phases": DEFAULT_OVERRIDE_PHASES,
+}
 
 # Zeitkonstanten (Sekunden) - identisch zum Node-RED Flow
 STATE_CHANGE_ON_DELAY = 3 * 60

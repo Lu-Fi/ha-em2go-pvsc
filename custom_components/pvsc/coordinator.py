@@ -22,13 +22,18 @@ from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
 )
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
     AMPERE_CHANGE_DELAY,
     AMPERE_CHANGE_INTERVAL,
+    DEFAULT_ENABLED,
     DEFAULT_MODBUS_FRAMING,
     DEFAULT_NOTIFY_ENTITY,
+    DEFAULT_OVERRIDE,
+    DEFAULT_SETTINGS,
+    DOMAIN,
     FIXED_ERR_LIMIT,
     MAX_A,
     MIN_A,
@@ -49,6 +54,7 @@ from .const import (
     STOP_CAUSE_LOW_SOC,
     STOP_CAUSE_NONE,
     STOP_CAUSE_TEXT,
+    STORAGE_VERSION,
     SWITCH_RATE_LIMIT_MAX,
     SWITCH_RATE_LIMIT_WINDOW,
     VOLT,
@@ -147,27 +153,32 @@ class PVSCCoordinator:
         self.switch_history: list[float] = []
 
         # --- live einstellbare Werte, gesetzt durch number/select/switch Entities ---
-        self.settings = {
-            "min_soc": 40,
-            "optimal_soc": 80,
-            "high_soc": 90,
-            "correction_factor": 75,
-            "correction_auto": True,
-            "ampere_deadband": 0.1,
-            "surplus_mode": "load",
-            "forced_ampere": 0,
-            "phase_auto": False,
-        }
+        # Werkseinstellungen aus const.py (siehe DEFAULT_SETTINGS/DEFAULT_OVERRIDE
+        # dort für die Herkunft der einzelnen Werte). Diese Defaults werden nur
+        # verwendet, solange in _async_load_persisted_state() noch nichts aus dem
+        # Store geladen werden konnte (erster Start bzw. noch nie geändert).
+        self.settings = dict(DEFAULT_SETTINGS)
         # Zeitstempel für die automatische Phasenumschaltung (Beginn der
         # stabilen Über-/Unterschreitung der Schwellwerte)
         self.phase_change_ts = 0.0
-        self.enabled = True
-        # Startzustand der Steuerung kommt aus dem Setup-Feld
-        # "control_on_start" (siehe async_setup) - True bedeutet: nach
-        # jedem (Neu-)Start schreibt die Integration sofort wieder auf
-        # die Wallbox, ohne dass der Schalter manuell gesetzt werden muss.
+        self.enabled = DEFAULT_ENABLED
+        # Startzustand der Steuerung: wird gleich in _async_load_persisted_state()
+        # ggf. aus dem Store überschrieben; ist dort noch nichts gespeichert,
+        # verwendet async_setup() weiterhin das Setup-Feld "control_on_start"
+        # (True bedeutet: nach jedem (Neu-)Start schreibt die Integration sofort
+        # wieder auf die Wallbox, ohne dass der Schalter manuell gesetzt werden
+        # muss). Siehe self._control_enabled_restored weiter unten.
         self.control_enabled = False
-        self.override = {"mode": "pv", "ampere": 6, "phases": 1}
+        self._control_enabled_restored = False
+        self.override = dict(DEFAULT_OVERRIDE)
+
+        # Persistiert die oben genannten "live" Werte (settings/override/enabled/
+        # control_enabled) dauerhaft in .storage/, damit sie einen HA-Neustart
+        # oder ein Update der Integration überstehen (siehe async_persist_state(),
+        # _async_load_persisted_state() und async_reset_to_defaults() unten).
+        self._store: Store = Store(
+            hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}_live_state"
+        )
 
         # Werden in async_setup() anhand der tatsächlichen Konfiguration
         # gesetzt; Defaults hier nur zur Sicherheit vor dem ersten Setup.
@@ -198,6 +209,10 @@ class PVSCCoordinator:
     # Setup / Teardown
     # ------------------------------------------------------------------
     async def async_setup(self) -> None:
+        # Zuvor gespeicherte "live" Werte (number/switch/select) laden, falls
+        # vorhanden - siehe _async_load_persisted_state().
+        await self._async_load_persisted_state()
+
         data = self.entry.data
         opts = self.entry.options
         self._modbus = ModbusTcpClient(
@@ -238,7 +253,15 @@ class PVSCCoordinator:
         # SOC-Gate und Batterie-Unterstützung (Korrekturfaktor fix 1.0
         # bzw. manueller Wert).
         self.has_battery = bool(data.get("home_soc_entity"))
-        self.control_enabled = bool(data.get("control_on_start", True))
+        # Nur wenn im Store noch KEIN control_enabled hinterlegt ist (ganz
+        # neuer Eintrag, oder Store leer/gelöscht) zählt weiterhin das
+        # Setup-Feld "control_on_start" als Startzustand - das erhält das
+        # bisherige Sicherheitsverhalten für neue Installationen unverändert
+        # (Default: Steuerung startet inaktiv). Sobald der Schalter einmal
+        # live betätigt wurde, ist der gespeicherte Zustand maßgeblich und
+        # übersteht künftige Neustarts/Updates (siehe _async_load_persisted_state).
+        if not self._control_enabled_restored:
+            self.control_enabled = bool(data.get("control_on_start", True))
         # Sicherheits-Gate: nur die tatsächlich konfigurierten Kern-Sensoren
         # müssen nach dem Start Werte geliefert haben.
         self.core_ready_fields = [
@@ -302,6 +325,66 @@ class PVSCCoordinator:
     def _push_updates(self) -> None:
         for entity in self._entities_to_update:
             entity.async_write_ha_state()
+
+    # ------------------------------------------------------------------
+    # Persistenz der "live" Werte (number/switch/select Entities)
+    # ------------------------------------------------------------------
+    # Ohne dies leben self.settings/self.override/self.enabled/
+    # self.control_enabled nur im Arbeitsspeicher des Coordinator-Objekts und
+    # werden bei jedem HA-Neustart bzw. jedem Update der Integration (der
+    # Coordinator wird dabei neu instanziiert) wieder auf die Hardcoded-
+    # Defaults aus const.py zurückgesetzt. Der Store schreibt eine kleine
+    # JSON-Datei nach .storage/pvsc_<entry_id>_live_state, die unabhängig
+    # vom Config-Entry (entry.data/entry.options) ist.
+    async def _async_load_persisted_state(self) -> None:
+        """Lädt zuvor gespeicherte Werte aus dem Store, falls vorhanden, und
+        überschreibt damit die in __init__() gesetzten Defaults. Muss vor dem
+        Rest von async_setup() laufen, insbesondere vor der control_on_start-
+        Auswertung dort."""
+        stored = await self._store.async_load()
+        if not stored:
+            return
+        self.settings.update(stored.get("settings", {}))
+        self.override.update(stored.get("override", {}))
+        if "enabled" in stored:
+            self.enabled = stored["enabled"]
+        if "control_enabled" in stored:
+            self.control_enabled = stored["control_enabled"]
+            self._control_enabled_restored = True
+
+    async def async_persist_state(self) -> None:
+        """Speichert die aktuellen 'live' Werte dauerhaft. Wird von den
+        number/switch/select Entities nach jeder Änderung aufgerufen, damit
+        der neue Wert einen HA-Neustart oder ein Integrations-Update übersteht."""
+        await self._store.async_save(
+            {
+                "settings": dict(self.settings),
+                "override": dict(self.override),
+                "enabled": self.enabled,
+                "control_enabled": self.control_enabled,
+            }
+        )
+
+    async def async_reset_to_defaults(self) -> None:
+        """Für button.pvsc_reset_defaults: setzt die live einstellbaren Werte
+        (SOC-Stufen, Korrekturfaktor, Ampere-Totband, Forced-Ampere,
+        Phasen-Automatik, Überschussmodus, Überschuss-Automatik an/aus sowie
+        den PV/Manuell/Stop-Override) auf die Werkseinstellungen aus
+        const.py zurück und schreibt sie sofort sichtbar in alle betroffenen
+        Entities.
+
+        Bewusst AUSGENOMMEN: control_enabled (Schalter "Steuerung aktiv").
+        Das ist der Sicherheits-Schalter, der echtes Schreiben auf die
+        Wallbox erlaubt - ein Klick auf "Reset to Default" soll nicht
+        nebenbei eine laufende Ladesteuerung abschalten oder umgekehrt eine
+        bislang inaktive Steuerung scharfschalten.
+        """
+        self.settings = dict(DEFAULT_SETTINGS)
+        self.override = dict(DEFAULT_OVERRIDE)
+        self.enabled = DEFAULT_ENABLED
+        self.phase_change_ts = 0.0
+        await self.async_persist_state()
+        self._push_updates()
 
     # ------------------------------------------------------------------
     # Eingehende HA-Zustände

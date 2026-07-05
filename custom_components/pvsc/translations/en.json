@@ -191,6 +191,9 @@
     "button": {
       "reset_stop_cause": {
         "name": "Reset stop cause"
+      },
+      "reset_defaults": {
+        "name": "Reset to defaults"
       }
     }
   }

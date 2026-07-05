@@ -191,6 +191,9 @@
     "button": {
       "reset_stop_cause": {
         "name": "Abbruchgrund zurücksetzen"
+      },
+      "reset_defaults": {
+        "name": "Auf Werkseinstellungen zurücksetzen"
       }
     }
   }
