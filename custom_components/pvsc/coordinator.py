@@ -371,16 +371,28 @@ class PVSCCoordinator:
         überschreibt damit die in __init__() gesetzten Defaults. Muss vor dem
         Rest von async_setup() laufen, insbesondere vor der control_on_start-
         Auswertung dort."""
-        stored = await self._store.async_load()
-        if not stored:
-            return
-        self.settings.update(stored.get("settings", {}))
+        stored = await self._store.async_load() or {}
+        stored_settings = stored.get("settings", {})
+        self.settings.update(stored_settings)
         self.override.update(stored.get("override", {}))
         if "enabled" in stored:
             self.enabled = stored["enabled"]
         if "control_enabled" in stored:
             self.control_enabled = stored["control_enabled"]
             self._control_enabled_restored = True
+
+        # Migration 0.5.0b5 -> 0.5.0b6: Die drei Hysterese-Delays wanderten
+        # vom Options-Flow in per-Wallbox number-Entities (settings). Ein
+        # zuvor im Options-Flow eingestellter Wert wird EINMALIG übernommen -
+        # nur solange im Store noch kein eigener settings-Wert existiert
+        # (danach ist die number-Entity die alleinige Quelle).
+        for key in (
+            "state_change_on_delay",
+            "state_change_off_delay",
+            "ampere_change_delay",
+        ):
+            if key not in stored_settings and key in self.entry.options:
+                self.settings[key] = self.entry.options[key]
 
     async def async_persist_state(self) -> None:
         """Speichert die aktuellen 'live' Werte dauerhaft. Wird von den
@@ -398,8 +410,9 @@ class PVSCCoordinator:
     async def async_reset_to_defaults(self) -> None:
         """Für button.pvsc_reset_defaults: setzt die live einstellbaren Werte
         (SOC-Stufen, Korrekturfaktor, Ampere-Totband, Forced-Ampere,
-        Phasen-Automatik, Überschussmodus, Überschuss-Automatik an/aus sowie
-        den PV/Manuell/Stop-Override) auf die Werkseinstellungen aus
+        Phasen-Automatik, Überschussmodus, Überschuss-Automatik an/aus,
+        Start-/Stopp-/Ampere-Anpassungsverzögerung sowie den
+        PV/Manuell/Stop-Override) auf die Werkseinstellungen aus
         const.py zurück und schreibt sie sofort sichtbar in alle betroffenen
         Entities.
 
@@ -888,14 +901,15 @@ class PVSCCoordinator:
         self.target_state = target_state
 
         # state_change_on_delay/off_delay und ampere_change_delay sind seit
-        # 0.5.0b5 per Options-Flow konfigurierbar (siehe config_flow.py). Die
-        # DEFAULT_*-Konstanten greifen nur, solange noch keine eigene
-        # Einstellung gespeichert wurde. STATE_CHANGE_INTERVAL/
-        # AMPERE_CHANGE_INTERVAL bleiben bewusst fest (siehe const.py).
-        opts = self.entry.options
-        state_change_on_delay = opts.get("state_change_on_delay", DEFAULT_STATE_CHANGE_ON_DELAY)
-        state_change_off_delay = opts.get("state_change_off_delay", DEFAULT_STATE_CHANGE_OFF_DELAY)
-        ampere_change_delay = opts.get("ampere_change_delay", DEFAULT_AMPERE_CHANGE_DELAY)
+        # 0.5.0b6 PRO WALLBOX als number-Entities einstellbar (Teil von
+        # self.settings, persistiert im Store; vorher 0.5.0b5: Options-Flow,
+        # Migration siehe _async_load_persisted_state()). Die DEFAULT_*-
+        # Konstanten greifen nur, solange noch keine eigene Einstellung
+        # gespeichert wurde. STATE_CHANGE_INTERVAL/AMPERE_CHANGE_INTERVAL
+        # bleiben bewusst fest (siehe const.py).
+        state_change_on_delay = s.get("state_change_on_delay", DEFAULT_STATE_CHANGE_ON_DELAY)
+        state_change_off_delay = s.get("state_change_off_delay", DEFAULT_STATE_CHANGE_OFF_DELAY)
+        ampere_change_delay = s.get("ampere_change_delay", DEFAULT_AMPERE_CHANGE_DELAY)
 
         state_change_delay = state_change_on_delay if target_state else state_change_off_delay
         state_change_needed = self.state != target_state or em2go["plug_changed"]

@@ -41,7 +41,8 @@ class PVSCResetStopCauseButton(PVSCEntity, ButtonEntity):
 class PVSCResetDefaultsButton(PVSCEntity, ButtonEntity):
     """Setzt die live einstellbaren Werte (SOC-Stufen, Korrekturfaktor,
     Ampere-Totband, Forced-Ampere, Phasen-Automatik, Überschussmodus,
-    Überschuss-Automatik, Override) auf die Werkseinstellungen aus const.py
+    Überschuss-Automatik, Start-/Stopp-/Ampere-Anpassungsverzögerung,
+    Override) auf die Werkseinstellungen aus const.py
     zurück. Der Sicherheits-Schalter "Steuerung aktiv" (control_enabled)
     bleibt davon bewusst unberührt - siehe Coordinator.async_reset_to_defaults().
     """

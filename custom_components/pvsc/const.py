@@ -59,9 +59,12 @@ OPT_NOTIFY_ENTITY = "notify_entity"
 OPT_MAX_AMPERE = "max_ampere"
 CONF_CONTROL_ON_START = "control_on_start"
 
-# Start-/Stopp- und Ampere-Anpassungs-Hysterese (Sekunden) - seit 0.5.0b5 per
-# Options-Flow änderbar, siehe DEFAULT_STATE_CHANGE_ON_DELAY /
-# DEFAULT_STATE_CHANGE_OFF_DELAY / DEFAULT_AMPERE_CHANGE_DELAY unten.
+# Start-/Stopp- und Ampere-Anpassungs-Hysterese (Sekunden) - von 0.5.0b5 bis
+# 0.5.0b5 im Options-Flow, seit 0.5.0b6 als number-Entities PRO WALLBOX
+# (settings-Keys "state_change_on_delay" / "state_change_off_delay" /
+# "ampere_change_delay", siehe DEFAULT_SETTINGS unten). Die alten
+# Options-Schlüssel bleiben hier nur für die einmalige Migration bestehender
+# Einträge definiert (coordinator._async_load_persisted_state()).
 OPT_STATE_CHANGE_ON_DELAY = "state_change_on_delay"
 OPT_STATE_CHANGE_OFF_DELAY = "state_change_off_delay"
 OPT_AMPERE_CHANGE_DELAY = "ampere_change_delay"
@@ -134,6 +137,18 @@ PHASE_DOWN_WATTS = 6 * 3 * 230  # 4140 W
 # hinterlegt ist. Einzeln als DEFAULT_*-Konstanten oben gehalten, hier nur
 # zu den Dicts zusammengefasst, die den Laufzeit-Strukturen in
 # PVSCCoordinator.__init__ (self.settings / self.override) entsprechen.
+# Hysterese-Delays (Sekunden) - seit 0.5.0b6 live einstellbar PRO WALLBOX
+# über number-Entities (Teil von settings, persistiert im Store). Werte
+# vorher im Options-Flow (0.5.0b5) bzw. fest kodiert (davor).
+DEFAULT_STATE_CHANGE_ON_DELAY = 3 * 60
+# Ursprünglich 3 Minuten wie beim Start (1:1 zum Node-RED Flow). Per
+# Nutzerwunsch auf 1 Minute reduziert: bei einem Lastspitzen-bedingten
+# Einbruch des PV-Überschusses (Überschuss, nicht zwingend PV-Produktion!)
+# reagiert die Ladung so deutlich schneller mit einem echten Stopp, statt
+# 3 Minuten lang mit Mindeststrom weiterzuladen.
+DEFAULT_STATE_CHANGE_OFF_DELAY = 60
+DEFAULT_AMPERE_CHANGE_DELAY = 30
+
 DEFAULT_SETTINGS = {
     "min_soc": DEFAULT_MIN_SOC,
     "optimal_soc": DEFAULT_OPTIMAL_SOC,
@@ -144,6 +159,9 @@ DEFAULT_SETTINGS = {
     "surplus_mode": DEFAULT_SURPLUS_MODE,
     "forced_ampere": DEFAULT_FORCED_AMPERE,
     "phase_auto": DEFAULT_PHASE_AUTO,
+    "state_change_on_delay": DEFAULT_STATE_CHANGE_ON_DELAY,
+    "state_change_off_delay": DEFAULT_STATE_CHANGE_OFF_DELAY,
+    "ampere_change_delay": DEFAULT_AMPERE_CHANGE_DELAY,
 }
 DEFAULT_OVERRIDE = {
     "mode": DEFAULT_OVERRIDE_MODE,
@@ -151,10 +169,9 @@ DEFAULT_OVERRIDE = {
     "phases": DEFAULT_OVERRIDE_PHASES,
 }
 
-# Zeitkonstanten (Sekunden). DEFAULT_STATE_CHANGE_ON_DELAY/OFF_DELAY und
-# DEFAULT_AMPERE_CHANGE_DELAY sind seit 0.5.0b5 nur noch Fallback-Defaults für
-# den Options-Flow (siehe config_flow.py) - der tatsächlich verwendete Wert
-# kommt zur Laufzeit aus entry.options (coordinator.py).
+# Zeitkonstanten (Sekunden). Die einstellbaren Delays sind oben bei
+# DEFAULT_STATE_CHANGE_ON_DELAY/OFF_DELAY/AMPERE_CHANGE_DELAY definiert
+# (pro Wallbox über number-Entities, Teil von DEFAULT_SETTINGS).
 #
 # STATE_CHANGE_INTERVAL und AMPERE_CHANGE_INTERVAL bleiben bewusst fest
 # (nicht konfigurierbar): das ist ein zusätzliches Rate-Limit, das verhindert,
@@ -163,15 +180,7 @@ DEFAULT_OVERRIDE = {
 # Stopp weiterhin bis mindestens STATE_CHANGE_INTERVAL Sekunden seit der
 # letzten Zustandsänderung vergangen sind, auch wenn state_change_off_delay
 # kürzer eingestellt wurde.
-DEFAULT_STATE_CHANGE_ON_DELAY = 3 * 60
-# Ursprünglich 3 Minuten wie beim Start (1:1 zum Node-RED Flow). Per
-# Nutzerwunsch auf 1 Minute reduziert: bei einem Lastspitzen-bedingten
-# Einbruch des PV-Überschusses (Überschuss, nicht zwingend PV-Produktion!)
-# reagiert die Ladung so deutlich schneller mit einem echten Stopp, statt
-# 3 Minuten lang mit Mindeststrom weiterzuladen.
-DEFAULT_STATE_CHANGE_OFF_DELAY = 60
 STATE_CHANGE_INTERVAL = 3 * 60
-DEFAULT_AMPERE_CHANGE_DELAY = 30
 AMPERE_CHANGE_INTERVAL = 30
 
 MIN_A = 6

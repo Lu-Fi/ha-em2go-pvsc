@@ -46,10 +46,7 @@
           "modbus_reconnect_backoff": "Modbus cool-down after errors before reconnecting (seconds, doubles on repeated errors)",
           "modbus_connect_settle_delay": "Modbus settle delay after a fresh connection (seconds)",
           "modbus_framing": "Modbus framing: 'mbap' (standard Modbus TCP, correct for the EM2GO) or 'rtu' (raw RTU frames, test fallback)",
-          "max_ampere": "Maximum charging current (A, 16 for 11 kW, 32 for 22 kW model)",
-          "state_change_on_delay": "Start delay (seconds) - how long the surplus must exceed the minimum before charging actually starts",
-          "state_change_off_delay": "Stop delay (seconds) - how long the surplus must be insufficient before charging actually stops",
-          "ampere_change_delay": "Current adjustment delay (seconds) - how long the target current must differ before the wallbox setpoint is adjusted"
+          "max_ampere": "Maximum charging current (A, 16 for 11 kW, 32 for 22 kW model)"
         }
       }
     }
@@ -178,6 +175,15 @@
       },
       "forced_ampere": {
         "name": "Test: forced amps (0=off)"
+      },
+      "state_change_on_delay": {
+        "name": "Start delay"
+      },
+      "state_change_off_delay": {
+        "name": "Stop delay"
+      },
+      "ampere_change_delay": {
+        "name": "Current adjustment delay"
       }
     },
     "select": {

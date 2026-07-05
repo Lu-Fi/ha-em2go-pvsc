@@ -14,7 +14,7 @@ Home Assistant custom integration that controls an **EM2GO Home wallbox** via Mo
 - Works **without** a home battery (fixed correction factor, no SOC gating)
 - Override modes: PV automatic, manual (fixed amps/phases), stop
 - Optional automatic 1↔3 phase switching with hysteresis (5 min above ~4.8 kW → 3 phases, 5 min below ~4.1 kW → back to 1 phase)
-- Start/stop hysteresis (3 min), amp ramping with deadband, rate limiting (max. 3 switch operations per 15 min)
+- Start/stop hysteresis and current-adjustment delay, adjustable live **per wallbox** as number entities; amp ramping with deadband, rate limiting (max. 3 switch operations per 15 min)
 - Optional notifications on charge start/stop via any `notify` entity (Telegram, mobile app, …)
 - Safe observation: the wallbox state is always read via Modbus, but the integration only writes while the "Control active" switch is on — turn it off to watch and simulate decisions without touching the hardware
 - Companion Lovelace card included and auto-registered — just add a card of type `custom:pvsc-card` to any dashboard (no manual resource setup needed)
@@ -94,11 +94,8 @@ Set when you first add the integration (**Settings → Devices & Services → Ad
 | Modbus timeout / command delay / reconnect backoff / connect settle delay | Low-level Modbus TCP timing, tuned to match the EM2GO's known quirks (see above) — leave these alone unless you're troubleshooting connection issues. |
 | Modbus framing | `mbap` (standard Modbus TCP, correct for the EM2GO) or `rtu` (raw RTU frames) — a test fallback, not normally needed. |
 | Maximum charging current (A) | `16` for the 11 kW wallbox, `32` for the 22 kW model. |
-| Start delay (s) | How long the surplus must exceed the minimum before charging actually starts (hysteresis against brief spikes), default `180` (3 min), range `60`–`1800` (1–30 min). |
-| Stop delay (s) | How long the surplus must be insufficient before charging actually stops, default `60` (1 min, reduced from 3 min in 0.5.0b5 — reacts faster to a genuine drop, e.g. a house-load spike, instead of holding minimum current for 3 minutes first), range `60`–`1800` (1–30 min). |
-| Current adjustment delay (s) | How long the target current must differ from the current setpoint before the wallbox is actually told to change it, default `30`, range `30`–`600` (0.5–10 min). |
 
-Note: an additional fixed 3-minute rate limit between two state changes, and a fixed 30-second rate limit between two current adjustments, apply on top of the delays above regardless of how you configure them — see the code comments in `const.py` (`STATE_CHANGE_INTERVAL`, `AMPERE_CHANGE_INTERVAL`) if you need to change those too.
+Note: up to version 0.5.0b5 the start/stop/current-adjustment delays lived here too. Since 0.5.0b6 they are **per-wallbox number entities** (see the next section); a value previously set via Options is migrated automatically the first time the new version starts.
 
 ### Live entities (switches/numbers/selects — persisted, resettable)
 
@@ -115,6 +112,9 @@ These are the entities you'll interact with day to day. Since version 0.5.0b1 th
 | High SOC (`number.pvsc_high_soc`, default `90 %`) | Above this, the correction factor goes up to 1.05 (using slightly more than the raw surplus, effectively also drawing a little from the battery), or down to 0.9 in the evening (after 15:00) if the PV forecast for the rest of the day is poor (<5 kWh), to avoid needlessly draining a battery that won't get refilled today. |
 | Correction factor (manual) (`number.pvsc_correction_factor`, default `75 %`) | Used instead of the automatic tiers above when "Automatic correction factor" is off. |
 | Amps deadband (`number.pvsc_ampere_deadband`, default `0.1 A`) | Minimum change in the target current before the wallbox setpoint is actually adjusted — avoids constant micro-adjustments. |
+| Start delay (`number.pvsc_state_change_on_delay`, default `180 s`) | Per-wallbox hysteresis: how long the surplus must exceed the minimum before charging actually starts (protects against brief spikes). Range `60`–`1800` s (1–30 min). |
+| Stop delay (`number.pvsc_state_change_off_delay`, default `60 s`) | Per-wallbox hysteresis: how long the surplus must be insufficient before charging actually stops. Default 1 min (reduced from 3 min in 0.5.0b5 — reacts faster to a genuine drop, e.g. a house-load spike, instead of holding minimum current for 3 minutes first). Range `60`–`1800` s. |
+| Current adjustment delay (`number.pvsc_ampere_change_delay`, default `30 s`) | Per-wallbox: how long the target current must differ from the current setpoint before the wallbox is actually told to change it. Range `30`–`600` s. |
 | Override: amps / Override phases (`number.pvsc_override_ampere`, `select.pvsc_override_phases`) | Fixed current/phase count used only while override mode is "manual". |
 | Test: forced amps (`number.pvsc_forced_ampere`, default `0` = off) | When set above 0, forces the maximum configured current regardless of actual surplus — for testing the wallbox/wiring, not for normal use. |
 | Override mode (`select.pvsc_override_mode`) | `pv` (default, automatic PV-surplus logic), `manual` (fixed current/phases from the two settings above), or `stop` (force charging off, ignoring everything else). |
@@ -122,6 +122,66 @@ These are the entities you'll interact with day to day. Since version 0.5.0b1 th
 | Reset stop cause (`button.pvsc_reset_stop_cause`) | Clears the current stop-cause value (also happens automatically overnight, 0:00–5:00). |
 | Reset to defaults (`button.pvsc_reset_defaults`) | Resets all of the above (except "Control active") to the factory defaults listed in this table. |
 
+Note on the delays: an additional fixed 3-minute rate limit between two state changes, and a fixed 30-second rate limit between two current adjustments, apply on top of the configured start/stop/current-adjustment delays — see the code comments in `const.py` (`STATE_CHANGE_INTERVAL`, `AMPERE_CHANGE_INTERVAL`) if you need to change those too.
+
+## Sensor reference (all values shown in the UI)
+
+Every sensor the integration creates, i.e. everything you can see on the device page or place on a dashboard (the bundled `custom:pvsc-card` displays a subset of these). All power/current values are refreshed every poll interval (default 7 s).
+
+### Calculation sensors (own surplus logic)
+
+| Entity | Description |
+|---|---|
+| PV power (`sensor.pvsc_pv`, W) | The PV production as used by the calculation — a mirror of your configured PV sensor. |
+| House load (`sensor.pvsc_load`, W) | House consumption **excluding** the wallbox: configured load sensor minus current wallbox power. In `saldo` mode it is derived from PV minus the saldo surplus instead. |
+| PV surplus (house) (`sensor.pvsc_surplus`, W) | Raw PV surplus before correction (PV − house load, floored at 0). While the car is charging, the portion allotted to the car (`car_surplus`) is subtracted, so this shows what's left for the house/grid. |
+| Surplus for car (`sensor.pvsc_car_surplus`, W) | The power actually offered to the car: raw surplus × correction factor + battery assist. This drives the target current. |
+| Target amps (`sensor.pvsc_target_ampere`, A) | The current the logic *wants* to set, derived from `car_surplus` / (230 V × phases), clamped to 6 A…max. Ramps toward it are subject to deadband and the current-adjustment delay. |
+| Current amps (setpoint) (`sensor.pvsc_ampere`, A) | The setpoint the integration last committed (or will commit) to the wallbox — may lag behind the target while delays/deadband hold a change back. |
+| Correction factor (`sensor.pvsc_correction_faktor`) | The factor currently applied to the raw surplus: automatic SOC tiers (0 / 0.75 / 0.9 / 1.0 / 1.05), the manual value, or fixed 1.0 without a home battery. |
+| Battery assist (`sensor.pvsc_battery_support_watts`, W) | How much the home battery is currently allowed to contribute on top of the PV surplus (0 unless SOC is above the "High SOC" tier and all safety caps pass). |
+| Battery usage Ø 15 min (`sensor.pvsc_battery_avg`, W) | 15-minute rolling average of the *calculated* shortfall (`min_watts − car_surplus`) — used for the "High battery usage" stop cause (> 500 W). See the subtlety note below the stop-cause table. |
+| Status (`sensor.pvsc_status_text`) | Short plain-text summary of what the logic is doing — full list of possible texts in the [status table](#status-texts--stop-cause-reference) below. |
+| Stop cause (`sensor.pvsc_stop_cause`) | Why charging was last stopped — full list in the [stop-cause table](#status-texts--stop-cause-reference) below. Cleared overnight (0–5 h) or via the reset button. |
+
+### Wallbox sensors (read directly via Modbus)
+
+| Entity | Description |
+|---|---|
+| Status code (`sensor.pvsc_em2go_state`) | Raw wallbox state register: `0` unknown, `1` ready, `2` connected, `3` starting, `4` charging, `5` error, `6` charging finished. |
+| Status (wallbox) (`sensor.pvsc_em2go_state_text`) | The same state as human-readable text (language follows the HA system language). |
+| Power (`sensor.pvsc_em2go_power`, W) | Actual charging power currently drawn through the wallbox. |
+| Current limit (actual) (`sensor.pvsc_em2go_ampere`, A) | The current limit the wallbox itself reports right now — useful to verify a written setpoint actually arrived. |
+| Phases (`sensor.pvsc_em2go_phases`) | Phase mode the wallbox reports (1 or 3). |
+| Meter reading (`sensor.pvsc_em2go_energy`, kWh) | Lifetime energy meter of the wallbox. |
+| Charged (current session) (`sensor.pvsc_em2go_session_kwh`, kWh) | Energy delivered in the current/most recent charging session; resets to 0 when a new session starts. |
+
+### Car sensors (display-only mirrors)
+
+Only created from your optionally configured car entities; no effect on charging decisions.
+
+| Entity | Description |
+|---|---|
+| Car state of charge (`sensor.pvsc_car_soc`, %) | Mirror of the configured car-SOC sensor. |
+| Car charge end (`sensor.pvsc_car_end`) | Mirror of the configured charge-end-time sensor. |
+
+### Binary sensors
+
+| Entity | Description |
+|---|---|
+| Plug connected (`binary_sensor.pvsc_plug_connected`) | A cable/vehicle is plugged in (wallbox plug register = 1). |
+| Charging (actual) (`binary_sensor.pvsc_charging`) | The wallbox is actually charging right now (state 3 or 4) — reflects reality, regardless of who is controlling. |
+| Should charge (own logic) (`binary_sensor.pvsc_target_charging`) | What the surplus logic has decided: on means "conditions for charging are met". Comparing this with "Charging (actual)" shows pending start/stop decisions waiting out their delay. |
+| Car at home (`binary_sensor.pvsc_car_home`) | The configured car device tracker reports "home". Only meaningful if a tracker is configured. |
+| Modbus connected (`binary_sensor.pvsc_modbus_connected`) | The last Modbus poll of the wallbox succeeded. |
+
+### Diagnostic entities
+
+| Entity | Description |
+|---|---|
+| Wallbox data source (`sensor.pvsc_modbus_status`) | `OK`, or the last Modbus error message while the connection is failing. |
+| Modbus consecutive failures (`sensor.pvsc_modbus_consecutive_failures`) | Number of Modbus polls that have failed in a row (0 when healthy); drives the exponential reconnect backoff. |
+| Modbus next retry in (`sensor.pvsc_modbus_retry_in`, s) | Seconds until the next reconnect attempt while in backoff/cool-down (0 when healthy). |
 
 ## Status texts & stop-cause reference
 

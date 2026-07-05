@@ -2,6 +2,13 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0b6] - 2026-07-05 (prerelease)
+
+### Changed
+
+- **Start delay**, **Stop delay**, and **Current adjustment delay** moved from the Options dialog to per-wallbox **number entities** (`number.pvsc_state_change_on_delay`, `number.pvsc_state_change_off_delay`, `number.pvsc_ampere_change_delay`, config category on the wallbox device). They are now adjustable live per wallbox, persist across restarts/updates like the other live settings, and are covered by the "Reset to defaults" button. Values previously set via Options are migrated automatically on first startup; the Options fields are gone. Allowed ranges are unchanged (start/stop 60–1800 s, current adjustment 30–600 s), as are the fixed extra rate limits (`STATE_CHANGE_INTERVAL`, `AMPERE_CHANGE_INTERVAL`).
+- README: new complete reference of every value shown in the UI — all sensors, binary sensors, and diagnostic entities are now documented, in addition to the existing switch/number/select/button tables.
+
 ## [0.5.0b5] - 2026-07-05 (prerelease)
 
 ### Added

@@ -36,6 +36,13 @@ def _set_setting(key: str):
     return _setter
 
 
+def _set_setting_int(key: str):
+    """Wie _set_setting, aber als ganze Zahl gespeichert (Sekunden-Delays)."""
+    def _setter(c: PVSCCoordinator, value: float) -> None:
+        c.settings[key] = int(value)
+    return _setter
+
+
 NUMBERS: tuple[PVSCNumberDescription, ...] = (
     PVSCNumberDescription(
         key="min_soc", name="Min. SOC", min_value=0, max_value=98, step=1, unit="%",
@@ -75,6 +82,32 @@ NUMBERS: tuple[PVSCNumberDescription, ...] = (
         step=1, unit="A", icon="mdi:test-tube", entity_category=EntityCategory.DIAGNOSTIC,
         mode=NumberMode.BOX,
         getter=lambda c: c.settings["forced_ampere"], setter=_set_setting("forced_ampere"),
+    ),
+    # Hysterese-Delays PRO WALLBOX (seit 0.5.0b6, vorher im Options-Flow).
+    # Mindestwerte bewusst nicht 0: kürzere Werte würden das Start-/Stopp-
+    # Verhalten zu nervös machen (Flattern) bzw. die Wallbox mit zu häufigen
+    # Schreibzugriffen belasten. Zusätzlich gelten die festen Rate-Limits
+    # STATE_CHANGE_INTERVAL/AMPERE_CHANGE_INTERVAL (const.py).
+    PVSCNumberDescription(
+        key="state_change_on_delay", name="Start-Verzögerung", min_value=60, max_value=1800,
+        step=5, unit="s", icon="mdi:timer-play-outline", entity_category=EntityCategory.CONFIG,
+        mode=NumberMode.BOX,
+        getter=lambda c: c.settings["state_change_on_delay"],
+        setter=_set_setting_int("state_change_on_delay"),
+    ),
+    PVSCNumberDescription(
+        key="state_change_off_delay", name="Stopp-Verzögerung", min_value=60, max_value=1800,
+        step=5, unit="s", icon="mdi:timer-stop-outline", entity_category=EntityCategory.CONFIG,
+        mode=NumberMode.BOX,
+        getter=lambda c: c.settings["state_change_off_delay"],
+        setter=_set_setting_int("state_change_off_delay"),
+    ),
+    PVSCNumberDescription(
+        key="ampere_change_delay", name="Ampere-Anpassungsverzögerung", min_value=30,
+        max_value=600, step=5, unit="s", icon="mdi:timer-cog-outline",
+        entity_category=EntityCategory.CONFIG, mode=NumberMode.BOX,
+        getter=lambda c: c.settings["ampere_change_delay"],
+        setter=_set_setting_int("ampere_change_delay"),
     ),
 )
 
