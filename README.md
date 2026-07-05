@@ -81,35 +81,37 @@ All values set via the switch/number/select entities below (SOC thresholds, corr
 
 The integration creates a device "EM2GO Home Wallbox" with sensors (PV, load, surplus, target amps, wallbox state/power/energy, diagnostics), switches (control active, automation enabled, auto correction factor), numbers (SOC thresholds, manual correction factor, overrides), selects (override mode/phases, surplus calculation mode), a status text sensor, and buttons (reset stop cause, reset to defaults).
 
-Note: the status text sensor and notification messages are currently German.
+The status text sensor, the stop-cause sensor, the wallbox status-text sensor, and the charge start/stop notifications follow Home Assistant's **system language** (Settings → System → General → Language) — German and English are supported, any other language falls back to German. This is independent of entity name translations (which use the usual `strings.json`/`translations` mechanism) and independent of your personal profile language, which only affects the frontend UI chrome, not these dynamically generated texts. See below for the exact wording in both languages.
 
 ## Status texts & stop-cause reference
 
-`sensor.pvsc_status_text` shows the current state as short German plain text, evaluated top to bottom (first match wins):
+`sensor.pvsc_status_text` shows the current state as short plain text in German or English (see language note above), evaluated top to bottom (first match wins):
 
-- **Warte auf Sensordaten** – waiting for sensor data: at least one required core sensor (PV, load, import/export, battery, home SOC) hasn't delivered a real value yet (e.g. right after a restart).
-- **Gestoppt (Override)** – the override select is set to "stop".
-- **Kein Fahrzeug angeschlossen** – no car plugged in.
-- **Lädt [manuell] mit X A[, Ziel Y A]** – actively charging; "manuell" if override mode is "manual"; the target current is only shown while it differs from the current one (ampere ramps up/down gradually).
-- **Start geplant** – conditions for charging are met, waiting out the start hysteresis (3 min) before switching on.
-- **Automatik deaktiviert** – the "Überschuss-Automatik" switch is off.
-- **Gestoppt: `<stop cause>`** – charging just stopped; see the stop-cause table below for the reason.
-- **Laden beendet** – the wallbox itself reports the charging session as finished (state code 6).
-- **Wartet: Heimspeicher-SOC zu niedrig** – home battery SOC is below `min_soc`, so charging is held back by design (the true safety floor from setup).
-- **Wartet auf PV-Überschuss** – everything else: simply not enough PV surplus right now.
+| German | English | Meaning |
+|---|---|---|
+| Warte auf Sensordaten | Waiting for sensor data | At least one required core sensor (PV, load, import/export, battery, home SOC) hasn't delivered a real value yet (e.g. right after a restart). |
+| Gestoppt (Override) | Stopped (override) | The override select is set to "stop". |
+| Kein Fahrzeug angeschlossen | No vehicle connected | No car plugged in. |
+| Lädt [manuell] mit X A[, Ziel Y A] | Charging [manually] at X A[, target Y A] | Actively charging; "manuell"/"manually" if override mode is "manual"; the target current is only shown while it differs from the current one (ampere ramps up/down gradually). |
+| Start geplant | Start scheduled | Conditions for charging are met, waiting out the start hysteresis (3 min) before switching on. |
+| Automatik deaktiviert | Automation disabled | The "Überschuss-Automatik" switch is off. |
+| Gestoppt: `<Grund>` | Stopped: `<reason>` | Charging just stopped; see the stop-cause table below for the reason. |
+| Laden beendet | Charging finished | The wallbox itself reports the charging session as finished (state code 6). |
+| Wartet: Heimspeicher-SOC zu niedrig | Waiting: home battery SOC too low | Home battery SOC is below `min_soc`, so charging is held back by design (the true safety floor from setup). |
+| Wartet auf PV-Überschuss | Waiting for PV surplus | Everything else: simply not enough PV surplus right now. |
 
-If "Steuerung aktiv" (`switch.pvsc_control_enabled`) is off, every text is prefixed with **"Steuerung aus: "** — the integration only reads and calculates, it isn't writing to the wallbox.
+If "Steuerung aktiv" (`switch.pvsc_control_enabled`) is off, every text is prefixed with **"Steuerung aus: "** / **"Control off: "** — the integration only reads and calculates, it isn't writing to the wallbox.
 
-`sensor.pvsc_stop_cause` (and the "Grund" field in charge-stop notifications) records **why charging was last stopped**, decided in this order at the moment charging switches off:
+`sensor.pvsc_stop_cause` (and the "Grund"/"Reason" field in charge-stop notifications) records **why charging was last stopped**, decided in this order at the moment charging switches off:
 
-| Value | Meaning |
-|---|---|
-| Kein Abbruch | No stop event yet, or the stop was due to something with its own status text (automation switched off mid-charge, wallbox reported "charging finished", car left the configured location, or a core sensor dropped out) rather than a PV/battery limit. |
-| Hohe Batterienutzung | The home battery had been discharging heavily (>500 W average over the last 15 min) to help feed the car — considered a critical draw regardless of SOC. |
-| SOC zu niedrig | Home battery SOC dropped below `min_soc` — the actual configured floor below which charging is blocked outright. |
-| Zu wenig PV-Überschuss | Plain and simple: not enough PV surplus to keep the car's minimum current (6 A × phases × 230 V) fed. This is also shown when SOC sits between `min_soc` and `optimal_soc` — in that band the battery is deliberately not allowed to top up the car (see below), so a shortfall there is a PV problem, not a battery-SOC problem. |
+| German | English | Meaning |
+|---|---|---|
+| Kein Abbruch | No stop | No stop event yet, or the stop was due to something with its own status text (automation switched off mid-charge, wallbox reported "charging finished", car left the configured location, or a core sensor dropped out) rather than a PV/battery limit. |
+| Hohe Batterienutzung | High battery usage | The home battery had been discharging heavily (>500 W average over the last 15 min) to help feed the car — considered a critical draw regardless of SOC. |
+| SOC zu niedrig | SOC too low | Home battery SOC dropped below `min_soc` — the actual configured floor below which charging is blocked outright. |
+| Zu wenig PV-Überschuss | Insufficient PV surplus | Plain and simple: not enough PV surplus to keep the car's minimum current (6 A × phases × 230 V) fed. This is also shown when SOC sits between `min_soc` and `optimal_soc` — in that band the battery is deliberately not allowed to top up the car (see below), so a shortfall there is a PV problem, not a battery-SOC problem. |
 
-**Why the distinction matters:** before version 0.5.1, any shortfall while SOC was below `optimal_soc` (default 80 %, not the real floor `min_soc`, default 40 %) was reported as "SOC zu niedrig" as long as there had recently been a meaningful calculated battery contribution (`battery_avg` > 50 W). That made "SOC zu niedrig" show up for what was really just a PV dip — the home battery's SOC was fine, it was simply not *allowed* (by the `min_soc`/`optimal_soc` policy) to bridge the gap. "SOC zu niedrig" is now reserved for an actual `soc < min_soc` situation; everything else that boils down to "not enough power available" is labelled "Zu wenig PV-Überschuss".
+**Why the distinction matters:** before version 0.5.0b2, any shortfall while SOC was below `optimal_soc` (default 80 %, not the real floor `min_soc`, default 40 %) was reported as "SOC zu niedrig" / "SOC too low" as long as there had recently been a meaningful calculated battery contribution (`battery_avg` > 50 W). That made this label show up for what was really just a PV dip — the home battery's SOC was fine, it was simply not *allowed* (by the `min_soc`/`optimal_soc` policy) to bridge the gap. "SOC too low" is now reserved for an actual `soc < min_soc` situation; everything else that boils down to "not enough power available" is labelled "Insufficient PV surplus". Since version 0.5.0b3, both labels (and the status texts, wallbox state text, and notifications) are also available in English, following Home Assistant's system language automatically.
 
 One more subtlety worth knowing: `sensor.pvsc_battery_avg` (used for the "Hohe Batterienutzung" threshold) is a 15-minute rolling average of the *calculated* shortfall (`min_watts - car_surplus`) sampled every tick — including ticks where the SOC band already forced actual battery support back to 0. So `battery_avg` can read high even in ticks where the battery wasn't really asked to contribute; treat it as "how much extra power would have been needed", not as a literal battery discharge measurement.
 
@@ -131,32 +133,36 @@ Alle über die Schalter/Zahlen/Auswahl-Entities gesetzten Werte (SOC-Stufen, Kor
 
 Die EM2GO-Eigenheiten (nur Unit-ID 255, Schreiben nur per FC16, nur eine Modbus-Session, mehrminütige Verriegelung nach Verbindungsabbrüchen) sind in der Integration berücksichtigt.
 
+Status-Text-Sensor, Abbruchgrund-Sensor, Wallbox-Status-Text-Sensor und die Ladestart/-stopp-Benachrichtigungen folgen der **HA-Systemsprache** (Einstellungen → System → Allgemein → Sprache) – Deutsch und Englisch werden unterstützt, jede andere Sprache fällt auf Deutsch zurück. Das ist unabhängig von der Übersetzung der Entity-Namen (die läuft über `strings.json`/`translations`) und unabhängig von deiner persönlichen Profil-Sprache, die nur die Oberfläche selbst betrifft, nicht diese dynamisch erzeugten Texte.
+
 ### Status- und Abbruchgrund-Texte
 
-`sensor.pvsc_status_text` zeigt den aktuellen Zustand als kurzen Klartext, von oben nach unten geprüft (der erste zutreffende Fall gewinnt):
+`sensor.pvsc_status_text` zeigt den aktuellen Zustand als kurzen Klartext auf Deutsch oder Englisch (siehe Sprachhinweis oben), von oben nach unten geprüft (der erste zutreffende Fall gewinnt):
 
-- **Warte auf Sensordaten** – mindestens ein benötigter Kern-Sensor (PV, Last, Netzbezug/-einspeisung, Batterie, Heimspeicher-SOC) hat noch keinen echten Wert geliefert (z. B. direkt nach einem Neustart).
-- **Gestoppt (Override)** – der Override-Modus steht auf "stop".
-- **Kein Fahrzeug angeschlossen** – kein Auto eingesteckt.
-- **Lädt [manuell] mit X A[, Ziel Y A]** – lädt aktiv; "manuell" bei Override-Modus "manual"; die Ziel-Ampere werden nur angezeigt, solange sie vom aktuellen Wert abweichen (die Rampe passt sich schrittweise an).
-- **Start geplant** – Ladebedingungen sind erfüllt, die Start-Hysterese (3 Min.) läuft noch ab, bevor tatsächlich eingeschaltet wird.
-- **Automatik deaktiviert** – der Schalter "Überschuss-Automatik" ist aus.
-- **Gestoppt: `<Abbruchgrund>`** – Ladung wurde gerade beendet; siehe Tabelle unten für den Grund.
-- **Laden beendet** – die Wallbox selbst meldet den Ladevorgang als abgeschlossen (Status-Code 6).
-- **Wartet: Heimspeicher-SOC zu niedrig** – Heimspeicher-SOC liegt unter `min_soc`, Laden wird bewusst zurückgehalten (die echte Sicherheitsgrenze aus dem Setup).
-- **Wartet auf PV-Überschuss** – alles andere: schlicht (noch) nicht genug PV-Überschuss.
+| Deutsch | Englisch | Bedeutung |
+|---|---|---|
+| Warte auf Sensordaten | Waiting for sensor data | Mindestens ein benötigter Kern-Sensor (PV, Last, Netzbezug/-einspeisung, Batterie, Heimspeicher-SOC) hat noch keinen echten Wert geliefert (z. B. direkt nach einem Neustart). |
+| Gestoppt (Override) | Stopped (override) | Der Override-Modus steht auf "stop". |
+| Kein Fahrzeug angeschlossen | No vehicle connected | Kein Auto eingesteckt. |
+| Lädt [manuell] mit X A[, Ziel Y A] | Charging [manually] at X A[, target Y A] | Lädt aktiv; "manuell"/"manually" bei Override-Modus "manual"; die Ziel-Ampere werden nur angezeigt, solange sie vom aktuellen Wert abweichen (die Rampe passt sich schrittweise an). |
+| Start geplant | Start scheduled | Ladebedingungen sind erfüllt, die Start-Hysterese (3 Min.) läuft noch ab, bevor tatsächlich eingeschaltet wird. |
+| Automatik deaktiviert | Automation disabled | Der Schalter "Überschuss-Automatik" ist aus. |
+| Gestoppt: `<Abbruchgrund>` | Stopped: `<reason>` | Ladung wurde gerade beendet; siehe Tabelle unten für den Grund. |
+| Laden beendet | Charging finished | Die Wallbox selbst meldet den Ladevorgang als abgeschlossen (Status-Code 6). |
+| Wartet: Heimspeicher-SOC zu niedrig | Waiting: home battery SOC too low | Heimspeicher-SOC liegt unter `min_soc`, Laden wird bewusst zurückgehalten (die echte Sicherheitsgrenze aus dem Setup). |
+| Wartet auf PV-Überschuss | Waiting for PV surplus | Alles andere: schlicht (noch) nicht genug PV-Überschuss. |
 
-Ist "Steuerung aktiv" (`switch.pvsc_control_enabled`) aus, wird jedem Text **"Steuerung aus: "** vorangestellt – die Integration liest und rechnet dann nur, schreibt aber nicht auf die Wallbox.
+Ist "Steuerung aktiv" (`switch.pvsc_control_enabled`) aus, wird jedem Text **"Steuerung aus: "** / **"Control off: "** vorangestellt – die Integration liest und rechnet dann nur, schreibt aber nicht auf die Wallbox.
 
-`sensor.pvsc_stop_cause` (und das Feld "Grund" in den Ladestopp-Benachrichtigungen) hält fest, **warum die Ladung zuletzt gestoppt wurde** – entschieden in dieser Reihenfolge in dem Moment, in dem die Ladung endet:
+`sensor.pvsc_stop_cause` (und das Feld "Grund"/"Reason" in den Ladestopp-Benachrichtigungen) hält fest, **warum die Ladung zuletzt gestoppt wurde** – entschieden in dieser Reihenfolge in dem Moment, in dem die Ladung endet:
 
-| Wert | Bedeutung |
-|---|---|
-| Kein Abbruch | Noch kein Stopp-Ereignis, oder der Stopp hatte einen eigenen Status-Text als Ursache (Automatik während des Ladens ausgeschaltet, Wallbox meldet "Laden beendet", Auto hat den konfigurierten Standort verlassen, oder ein Kern-Sensor ist ausgefallen) statt eines PV-/Batterie-Limits. |
-| Hohe Batterienutzung | Der Heimspeicher hat stark entladen (> 500 W im Schnitt der letzten 15 Min.), um das Auto mitzuversorgen – das gilt unabhängig vom SOC als kritische Belastung. |
-| SOC zu niedrig | Heimspeicher-SOC ist unter `min_soc` gefallen – die tatsächlich konfigurierte Untergrenze, unter der gar nicht mehr geladen wird. |
-| Zu wenig PV-Überschuss | Schlicht: der PV-Überschuss reicht nicht für den Mindeststrom des Autos (6 A × Phasen × 230 V). Das gilt auch, wenn der SOC zwischen `min_soc` und `optimal_soc` liegt – in diesem Band darf die Batterie das Auto bewusst nicht mehr unterstützen (siehe unten), ein Engpass dort ist also ein PV-Problem, kein Batterie-SOC-Problem. |
+| Deutsch | Englisch | Bedeutung |
+|---|---|---|
+| Kein Abbruch | No stop | Noch kein Stopp-Ereignis, oder der Stopp hatte einen eigenen Status-Text als Ursache (Automatik während des Ladens ausgeschaltet, Wallbox meldet "Laden beendet", Auto hat den konfigurierten Standort verlassen, oder ein Kern-Sensor ist ausgefallen) statt eines PV-/Batterie-Limits. |
+| Hohe Batterienutzung | High battery usage | Der Heimspeicher hat stark entladen (> 500 W im Schnitt der letzten 15 Min.), um das Auto mitzuversorgen – das gilt unabhängig vom SOC als kritische Belastung. |
+| SOC zu niedrig | SOC too low | Heimspeicher-SOC ist unter `min_soc` gefallen – die tatsächlich konfigurierte Untergrenze, unter der gar nicht mehr geladen wird. |
+| Zu wenig PV-Überschuss | Insufficient PV surplus | Schlicht: der PV-Überschuss reicht nicht für den Mindeststrom des Autos (6 A × Phasen × 230 V). Das gilt auch, wenn der SOC zwischen `min_soc` und `optimal_soc` liegt – in diesem Band darf die Batterie das Auto bewusst nicht mehr unterstützen (siehe unten), ein Engpass dort ist also ein PV-Problem, kein Batterie-SOC-Problem. |
 
-**Warum die Unterscheidung wichtig ist:** Vor Version 0.5.1 wurde jeder Engpass, während der SOC unter `optimal_soc` lag (Standard 80 %, NICHT die echte Untergrenze `min_soc`, Standard 40 %), als "SOC zu niedrig" gemeldet, sofern kurz zuvor ein nennenswerter rechnerischer Batterie-Anteil (`battery_avg` > 50 W) vorlag. Dadurch erschien "SOC zu niedrig" auch dann, wenn es eigentlich nur eine PV-Flaute war – der Heimspeicher war völlig in Ordnung, durfte laut `min_soc`/`optimal_soc`-Politik nur nicht mehr einspringen. "SOC zu niedrig" ist jetzt ausschließlich für den Fall `soc < min_soc` reserviert; alles andere, was auf "zu wenig verfügbare Leistung" hinausläuft, heißt "Zu wenig PV-Überschuss".
+**Warum die Unterscheidung wichtig ist:** Vor Version 0.5.0b2 wurde jeder Engpass, während der SOC unter `optimal_soc` lag (Standard 80 %, NICHT die echte Untergrenze `min_soc`, Standard 40 %), als "SOC zu niedrig" gemeldet, sofern kurz zuvor ein nennenswerter rechnerischer Batterie-Anteil (`battery_avg` > 50 W) vorlag. Dadurch erschien "SOC zu niedrig" auch dann, wenn es eigentlich nur eine PV-Flaute war – der Heimspeicher war völlig in Ordnung, durfte laut `min_soc`/`optimal_soc`-Politik nur nicht mehr einspringen. "SOC zu niedrig" ist jetzt ausschließlich für den Fall `soc < min_soc` reserviert; alles andere, was auf "zu wenig verfügbare Leistung" hinausläuft, heißt "Zu wenig PV-Überschuss". Seit Version 0.5.0b3 gibt es diese Texte (und status_text, Wallbox-Status-Text sowie die Benachrichtigungen) auch auf Englisch, automatisch passend zur HA-Systemsprache.
 
 Noch eine Feinheit: `sensor.pvsc_battery_avg` (Basis für die "Hohe Batterienutzung"-Schwelle) ist ein gleitender 15-Minuten-Schnitt des *rechnerischen* Fehlbetrags (`min_watts - car_surplus`), der in jedem Tick erfasst wird – auch in Ticks, in denen das SOC-Band die tatsächliche Batterie-Unterstützung schon auf 0 zurückgesetzt hat. `battery_avg` kann also auch dann hoch sein, wenn die Batterie real gar nicht gebraucht wurde; eher als "wie viel zusätzliche Leistung wäre nötig gewesen" lesen, nicht als echte Entlade-Messung.

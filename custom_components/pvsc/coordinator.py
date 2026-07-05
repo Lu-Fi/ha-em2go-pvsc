@@ -34,6 +34,8 @@ from .const import (
     DEFAULT_OVERRIDE,
     DEFAULT_SETTINGS,
     DOMAIN,
+    EM2GO_STATE_TEXT_DE,
+    EM2GO_STATE_TEXT_EN,
     FIXED_ERR_LIMIT,
     MAX_A,
     MIN_A,
@@ -54,7 +56,8 @@ from .const import (
     STOP_CAUSE_LOW_SOC,
     STOP_CAUSE_LOW_SURPLUS,
     STOP_CAUSE_NONE,
-    STOP_CAUSE_TEXT,
+    STOP_CAUSE_TEXT_DE,
+    STOP_CAUSE_TEXT_EN,
     STORAGE_VERSION,
     SWITCH_RATE_LIMIT_MAX,
     SWITCH_RATE_LIMIT_WINDOW,
@@ -328,6 +331,32 @@ class PVSCCoordinator:
             entity.async_write_ha_state()
 
     # ------------------------------------------------------------------
+    # Sprache für dynamische Texte (status_text, Abbruchgrund, Wallbox-
+    # Status, Ladestart/-stopp-Benachrichtigungen). Diese Werte laufen NICHT
+    # über strings.json/translations (das übersetzt nur Entity-Namen),
+    # sondern werden hier direkt anhand der aktuellen HA-Systemsprache
+    # gewählt - bei jedem Aufruf neu, damit ein Sprachwechsel ohne Neustart
+    # der Integration wirkt.
+    # ------------------------------------------------------------------
+    def _lang(self) -> str:
+        """'en' bei englischer HA-Systemsprache (Einstellungen -> System ->
+        Allgemein -> Sprache), sonst 'de' (Fallback für alle anderen
+        Sprachen, da nur Deutsch/Englisch gepflegt werden)."""
+        lang = (self.hass.config.language or "de").lower()
+        return "en" if lang.startswith("en") else "de"
+
+    @property
+    def stop_cause_text(self) -> str:
+        table = STOP_CAUSE_TEXT_EN if self._lang() == "en" else STOP_CAUSE_TEXT_DE
+        return table.get(self.stop_cause, str(self.stop_cause))
+
+    @property
+    def em2go_state_text(self) -> str:
+        table = EM2GO_STATE_TEXT_EN if self._lang() == "en" else EM2GO_STATE_TEXT_DE
+        fallback = table.get(0, "?")
+        return table.get(self.em2go["state"], fallback)
+
+    # ------------------------------------------------------------------
     # Persistenz der "live" Werte (number/switch/select Entities)
     # ------------------------------------------------------------------
     # Ohne dies leben self.settings/self.override/self.enabled/
@@ -485,12 +514,21 @@ class PVSCCoordinator:
         if not notify_entity:
             return
 
+        en = self._lang() == "en"
+
         if charging:
-            message = (
-                "Wallbox: Ladung gestartet\n"
-                f"Zähler: {self.em2go['energy']:g} kWh\n"
-                f"Strom: {self.em2go['ampere']:g} A"
-            )
+            if en:
+                message = (
+                    "Wallbox: charging started\n"
+                    f"Meter: {self.em2go['energy']:g} kWh\n"
+                    f"Current: {self.em2go['ampere']:g} A"
+                )
+            else:
+                message = (
+                    "Wallbox: Ladung gestartet\n"
+                    f"Zähler: {self.em2go['energy']:g} kWh\n"
+                    f"Strom: {self.em2go['ampere']:g} A"
+                )
         else:
             unplugged = self.em2go["plug"] != 1
             if unplugged and not self.em2go.get("plug_changed"):
@@ -499,19 +537,28 @@ class PVSCCoordinator:
                 # keine Meldung (wie im Node-RED-Flow). Ein ECHTES
                 # Abstecken (plug_changed=True) meldet dagegen sehr wohl.
                 return
-            grund = (
-                "Stecker gezogen"
-                if unplugged
-                else STOP_CAUSE_TEXT.get(self.stop_cause, self.stop_cause)
-            )
-            message = (
-                "Wallbox: Ladung beendet\n"
-                f"Geladen: {self.em2go['loaded_kwh']:g} kWh\n"
-                f"Zähler: {self.em2go['energy']:g} kWh\n"
-                f"Grund: {grund}"
-            )
+            if en:
+                grund = "Unplugged" if unplugged else self.stop_cause_text
+                message = (
+                    "Wallbox: charging finished\n"
+                    f"Charged: {self.em2go['loaded_kwh']:g} kWh\n"
+                    f"Meter: {self.em2go['energy']:g} kWh\n"
+                    f"Reason: {grund}"
+                )
+            else:
+                grund = "Stecker gezogen" if unplugged else self.stop_cause_text
+                message = (
+                    "Wallbox: Ladung beendet\n"
+                    f"Geladen: {self.em2go['loaded_kwh']:g} kWh\n"
+                    f"Zähler: {self.em2go['energy']:g} kWh\n"
+                    f"Grund: {grund}"
+                )
         if self.has_car_soc and self.car["soc"] >= 0:
-            message += f"\nAuto: {round(self.car['soc'])} %"
+            message += (
+                f"\nCar: {round(self.car['soc'])} %"
+                if en
+                else f"\nAuto: {round(self.car['soc'])} %"
+            )
 
         try:
             await self.hass.services.async_call(
@@ -958,33 +1005,47 @@ class PVSCCoordinator:
         state_change_needed, ampere_change_needed,
     ) -> None:
         """Kurzer Klartext-Status ohne Icons und ohne redundante Messwerte -
-        PV, Hauslast, SOC, Überschuss usw. haben ihre eigenen Sensoren."""
+        PV, Hauslast, SOC, Überschuss usw. haben ihre eigenen Sensoren.
+        Sprache folgt der HA-Systemsprache (siehe _lang())."""
         home = self.home
         em2go = self.em2go
+        en = self._lang() == "en"
 
         if not getattr(self, "core_ready", True):
-            text = "Warte auf Sensordaten"
+            text = "Waiting for sensor data" if en else "Warte auf Sensordaten"
         elif override_mode == "stop":
-            text = "Gestoppt (Override)"
+            text = "Stopped (override)" if en else "Gestoppt (Override)"
         elif em2go["plug"] != 1:
-            text = "Kein Fahrzeug angeschlossen"
+            text = "No vehicle connected" if en else "Kein Fahrzeug angeschlossen"
         elif self.state:
-            text = "Lädt manuell" if override_mode == "manual" else "Lädt"
-            text += f" mit {self.ampere:g} A"
-            if override_mode != "manual" and abs(self.target_ampere - self.ampere) >= 0.05:
-                text += f", Ziel {self.target_ampere:g} A"
+            if en:
+                text = "Charging manually" if override_mode == "manual" else "Charging"
+                text += f" at {self.ampere:g} A"
+                if override_mode != "manual" and abs(self.target_ampere - self.ampere) >= 0.05:
+                    text += f", target {self.target_ampere:g} A"
+            else:
+                text = "Lädt manuell" if override_mode == "manual" else "Lädt"
+                text += f" mit {self.ampere:g} A"
+                if override_mode != "manual" and abs(self.target_ampere - self.ampere) >= 0.05:
+                    text += f", Ziel {self.target_ampere:g} A"
         elif self.target_state:
-            text = "Start geplant"
+            text = "Start scheduled" if en else "Start geplant"
         elif not self.enabled:
-            text = "Automatik deaktiviert"
+            text = "Automation disabled" if en else "Automatik deaktiviert"
         elif self.stop_cause:
-            text = f"Gestoppt: {STOP_CAUSE_TEXT.get(self.stop_cause, self.stop_cause)}"
+            text = (
+                f"Stopped: {self.stop_cause_text}" if en else f"Gestoppt: {self.stop_cause_text}"
+            )
         elif em2go["state"] == 6:
-            text = "Laden beendet"
+            text = "Charging finished" if en else "Laden beendet"
         elif self.has_battery and home["soc"] < self.settings["min_soc"]:
-            text = "Wartet: Heimspeicher-SOC zu niedrig"
+            text = (
+                "Waiting: home battery SOC too low"
+                if en
+                else "Wartet: Heimspeicher-SOC zu niedrig"
+            )
         else:
-            text = "Wartet auf PV-Überschuss"
+            text = "Waiting for PV surplus" if en else "Wartet auf PV-Überschuss"
 
         color = "yellow"
         if self.state:
@@ -1000,7 +1061,7 @@ class PVSCCoordinator:
             color = "grey"
 
         if not self.control_enabled:
-            text = "Steuerung aus: " + text
+            text = ("Control off: " + text) if en else ("Steuerung aus: " + text)
 
         self.status_text = text
         self.status_color = color

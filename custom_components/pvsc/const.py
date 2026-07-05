@@ -171,14 +171,28 @@ STOP_CAUSE_LOW_SOC = 2
 # gemeldet, obwohl min_soc gar nicht unterschritten war.
 STOP_CAUSE_LOW_SURPLUS = 3
 
-STOP_CAUSE_TEXT = {
+# ---------------------------------------------------------------------------
+# Zweisprachige Texte (DE/EN) für dynamische Sensor-Werte und Benachrichtigungen.
+# Diese Texte werden NICHT über strings.json/translations übersetzt (das
+# funktioniert nur für Entity-Namen), sondern folgen zur Laufzeit der
+# HA-Systemsprache (Einstellungen -> System -> Allgemein -> Sprache) - siehe
+# PVSCCoordinator._lang() in coordinator.py. Jede andere Systemsprache als
+# Englisch fällt auf Deutsch zurück.
+# ---------------------------------------------------------------------------
+STOP_CAUSE_TEXT_DE = {
     0: "Kein Abbruch",
     1: "Hohe Batterienutzung",
     2: "SOC zu niedrig",
     3: "Zu wenig PV-Überschuss",
 }
+STOP_CAUSE_TEXT_EN = {
+    0: "No stop",
+    1: "High battery usage",
+    2: "SOC too low",
+    3: "Insufficient PV surplus",
+}
 
-EM2GO_STATE_TEXT = {
+EM2GO_STATE_TEXT_DE = {
     0: "Unbekannt",
     1: "Bereit",
     2: "Verbunden",
@@ -186,6 +200,15 @@ EM2GO_STATE_TEXT = {
     4: "Lädt",
     5: "Fehler",
     6: "Laden beendet",
+}
+EM2GO_STATE_TEXT_EN = {
+    0: "Unknown",
+    1: "Ready",
+    2: "Connected",
+    3: "Starting…",
+    4: "Charging",
+    5: "Error",
+    6: "Charging finished",
 }
 
 # Modbus-Register der EM2GO Wallbox (identisch zum bestehenden Node-RED Flow)

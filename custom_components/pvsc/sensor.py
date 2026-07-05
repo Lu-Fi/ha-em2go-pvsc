@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, EM2GO_STATE_TEXT, STOP_CAUSE_TEXT
+from .const import DOMAIN
 from .coordinator import PVSCCoordinator
 from .entity import PVSCEntity
 
@@ -79,7 +79,7 @@ SENSORS: tuple[PVSCSensorDescription, ...] = (
     ),
     PVSCSensorDescription(
         key="stop_cause", name="Abbruchgrund", icon="mdi:alert-circle-outline",
-        value_fn=lambda c: STOP_CAUSE_TEXT.get(c.stop_cause, str(c.stop_cause)),
+        value_fn=lambda c: c.stop_cause_text,
     ),
     PVSCSensorDescription(
         key="status_text", name="Status", icon="mdi:text-box-outline",
@@ -91,7 +91,7 @@ SENSORS: tuple[PVSCSensorDescription, ...] = (
     ),
     PVSCSensorDescription(
         key="em2go_state_text", name="Status (Wallbox)", icon="mdi:ev-station",
-        value_fn=lambda c: EM2GO_STATE_TEXT.get(c.em2go["state"], "Unbekannt"),
+        value_fn=lambda c: c.em2go_state_text,
     ),
     PVSCSensorDescription(
         key="em2go_power", name="Leistung", unit="W",
