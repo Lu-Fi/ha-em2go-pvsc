@@ -63,6 +63,10 @@ Home Assistant custom integration that controls an **EM2GO Home wallbox** via Mo
 
 <img src="docs/04-sensoren.png" alt="Full list of sensor entities exposed by the integration" width="400">
 
+**Options dialog — technical parameters**
+
+<img src="docs/06-technische-parameter.png" alt="Technical parameters options dialog: notifications, power/battery limits, Modbus timing, phase framing, ramping and priority settings" width="450">
+
 ## EM2GO Modbus quirks (handled by this integration)
 
 These cost us some debugging, so they are documented here:
