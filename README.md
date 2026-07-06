@@ -22,6 +22,47 @@ Home Assistant custom integration that controls an **EM2GO Home wallbox** via Mo
 - Config UI and all dynamically generated texts (status, stop cause, notifications) available in German and English, following Home Assistant's system language automatically — see [Language behaviour](#language-behaviour) below
 - All "live" settings (SOC thresholds, correction factor, overrides, automation on/off, …) persist across Home Assistant restarts and integration updates, with a one-click "Reset to defaults" button
 
+## Screenshots
+
+<table>
+<tr>
+<td align="center" width="50%">
+
+**Lovelace card**
+
+<img src="docs/01-dashboard-card.png" alt="Dashboard card showing charge state, power and PV/manual/stop controls">
+
+</td>
+<td align="center" width="50%">
+
+**Integration overview**
+
+<img src="docs/02-integration-overview.png" alt="Integration entry listing the EM2GO Home Wallbox device with 43 entities">
+
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+
+**Device page — control & activity**
+
+<img src="docs/03-device-page.png" alt="Device page with Steuerung sliders (SOC thresholds, correction factor, override mode) and activity log">
+
+</td>
+<td align="center" width="50%">
+
+**Configuration & diagnostics**
+
+<img src="docs/05-konfiguration-diagnose.png" alt="Configuration card (phase switching, correction factor) and diagnostics card (Modbus status)">
+
+</td>
+</tr>
+</table>
+
+**All sensors**
+
+<img src="docs/04-sensoren.png" alt="Full list of sensor entities exposed by the integration" width="400">
+
 ## EM2GO Modbus quirks (handled by this integration)
 
 These cost us some debugging, so they are documented here:
