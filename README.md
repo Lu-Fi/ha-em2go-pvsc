@@ -3,6 +3,9 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![GitHub release](https://img.shields.io/github/release/Lu-Fi/ha-em2go-pvsc.svg)](https://github.com/Lu-Fi/ha-em2go-pvsc/releases)
 [![Downloads](https://img.shields.io/github/downloads/Lu-Fi/ha-em2go-pvsc/total.svg)](https://github.com/Lu-Fi/ha-em2go-pvsc/releases)
+[![Validate](https://github.com/Lu-Fi/ha-em2go-pvsc/actions/workflows/validate.yml/badge.svg)](https://github.com/Lu-Fi/ha-em2go-pvsc/actions/workflows/validate.yml)
+[![GitHub last commit](https://img.shields.io/github/last-commit/Lu-Fi/ha-em2go-pvsc.svg)](https://github.com/Lu-Fi/ha-em2go-pvsc/commits)
+[![License](https://img.shields.io/github/license/Lu-Fi/ha-em2go-pvsc.svg)](https://github.com/Lu-Fi/ha-em2go-pvsc/blob/main/LICENSE)
 
 Home Assistant custom integration that controls an **EM2GO Home wallbox** via Modbus TCP for **PV surplus charging** — the wallbox charges your EV with exactly the solar power you would otherwise export to the grid.
 
