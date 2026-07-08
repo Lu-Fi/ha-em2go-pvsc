@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from homeassistant.components import persistent_notification
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
@@ -41,6 +42,25 @@ async def _async_register_card(hass: HomeAssistant) -> None:
 
     integration = await async_get_integration(hass, DOMAIN)
     add_extra_js_url(hass, f"{CARD_URL}?v={integration.version}")
+
+    # add_extra_js_url wirkt nur in-memory und wird bei jedem HA-Neustart
+    # neu aufgebaut. Bereits offene Browser-Tabs/Apps kennen die (neu)
+    # registrierte Card erst nach einem harten Neuladen - bis dahin zeigt
+    # jede "custom:pvsc-card" fälschlich "Konfigurationsfehler: Custom
+    # element doesn't exist". Aktive Erinnerung statt stillem Fehlerbild.
+    persistent_notification.async_create(
+        hass,
+        (
+            f"Die pvsc-card (Version {integration.version}) wurde beim "
+            "Start neu registriert. Bereits offene Dashboards/Apps zeigen "
+            "bei 'custom:pvsc-card' bis zu einem harten Neuladen "
+            "fälschlich 'Konfigurationsfehler: Custom element doesn't "
+            "exist: pvsc-card'. Browser: Strg+Shift+R (bzw. Cmd+Shift+R) - "
+            "Companion-App: App beenden und neu öffnen."
+        ),
+        title="PVSC: Karte neu geladen - Browser/App neu laden",
+        notification_id="pvsc_card_reload",
+    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

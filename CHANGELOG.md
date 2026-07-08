@@ -2,6 +2,12 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.1b1] - 2026-07-08 (prerelease)
+
+### Added
+
+- The bundled Lovelace card (`custom:pvsc-card`) is auto-registered via `frontend.add_extra_js_url`, which only takes effect for browser tabs/apps that load the frontend *after* the registration runs — an in-memory step redone on every HA restart. Tabs/apps already open across a restart don't know about it and show "Configuration error: Custom element doesn't exist: pvsc-card" until reloaded. The integration now creates a persistent notification ("PVSC: Karte neu geladen - Browser/App neu laden") every time it (re-)registers the card at startup, explaining that a hard reload (Ctrl+Shift+R / restart the companion app) is needed — instead of silently leaving affected dashboards broken.
+
 ## [0.5.0] - 2026-07-05
 
 Stable release consolidating prereleases 0.5.0b1–0.5.0b12. Highlights since 0.4.2:
