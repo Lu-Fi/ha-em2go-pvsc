@@ -75,6 +75,13 @@ OPT_AMPERE_CHANGE_DELAY = "ampere_change_delay"
 # Anpassung in fremden Installationen nutzbar ist.
 DEFAULT_NOTIFY_ENTITY = ""
 
+# Anzahl aufeinanderfolgender Modbus-Fehler, bevor eine "Verbindung verloren"-
+# Meldung verschickt wird (nutzt dieselbe notify_entity/notify_enabled wie
+# Ladestart/-stopp). Verhindert Alarm-Spam bei einzelnen Timeout-Ausreißern -
+# bei DEFAULT_MODBUS_RECONNECT_BACKOFF=10s (verdoppelnd) sind das grob 10+20s
+# Downtime, bevor alarmiert wird.
+MODBUS_NOTIFY_THRESHOLD = 3
+
 DEFAULT_MODBUS_FRAMING = "mbap"  # "rtu" oder "mbap" - per Options-Flow umschaltbar.
 # Bestätigt via Node-RED modbus-client Node-Konfiguration: "TCP Type: DEFAULT"
 # bedeutet echtes Modbus-TCP/MBAP-Framing (node-red-contrib-modbus reserviert

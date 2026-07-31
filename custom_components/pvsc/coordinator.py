@@ -41,6 +41,7 @@ from .const import (
     FIXED_ERR_LIMIT,
     MAX_A,
     MIN_A,
+    MODBUS_NOTIFY_THRESHOLD,
     MODBUS_READS,
     REG_ACTION,
     REG_AMPERE,
@@ -216,6 +217,12 @@ class PVSCCoordinator:
         # Ladezustand (None = noch nie ermittelt, z.B. direkt nach Start -
         # dann keine Meldung, um Neustart-Spam zu vermeiden).
         self._last_charging: bool | None = None
+        # Ob für den aktuellen Verbindungsausfall bereits eine "Verbindung
+        # verloren"-Meldung verschickt wurde (siehe _maybe_notify_modbus_change) -
+        # verhindert eine Meldung pro fehlgeschlagenem Tick und stellt sicher,
+        # dass die "wieder verbunden"-Meldung nur nach einem ECHTEN Ausfall
+        # kommt, nicht nach jedem einzelnen Reconnect-Zyklus.
+        self._modbus_down_notified = False
         self._unsub_interval = None
         # Schutz gegen überlappende Ticks: async_track_time_interval wartet
         # NICHT darauf, dass ein vorheriger Tick fertig ist, bevor der
@@ -533,6 +540,7 @@ class PVSCCoordinator:
             # control_enabled steuert ausschließlich, ob auch geschrieben
             # wird (Start/Stopp/Ampere/Phasen).
             await self._poll_modbus_direct()
+            await self._maybe_notify_modbus_change()
 
             self._sync_state_from_em2go()
             await self._maybe_notify_charging_change()
@@ -616,17 +624,86 @@ class PVSCCoordinator:
                 else f"\nAuto: {round(self.car['soc'])} %"
             )
 
+        await self._send_notify(notify_entity, message)
+
+    async def _send_notify(self, notify_entity: str, message: str) -> None:
+        """Verschickt `message` an `notify_entity` per telegram_bot.send_message.
+
+        Bewusst NICHT die generische notify.send_message Action: Die
+        schickt hier standardmäßig mit Markdown-Parsing, und Texte mit
+        Bindestrichen/Punkten/Klammern (z.B. "PV-Überschuss", Sätze mit
+        Punkt) lassen Telegram mit "BadRequest: can't parse entities"
+        scheitern - und zwar lautlos, weil die anderen Aufrufer bislang
+        mit blocking=False liefen. parse_mode=plain_text umgeht das.
+        Setzt voraus, dass notify_entity von der telegram_bot-Integration
+        stammt (wie in dieser Installation der Fall) - keine generische
+        Lösung für beliebige notify-Plattformen mehr."""
         try:
             await self.hass.services.async_call(
-                "notify",
+                "telegram_bot",
                 "send_message",
-                {"entity_id": notify_entity, "message": message},
-                blocking=False,
+                {"entity_id": notify_entity, "message": message, "parse_mode": "plain_text"},
+                blocking=True,
             )
         except Exception as err:  # noqa: BLE001 - Meldung darf Regelung nie stören
             _LOGGER.warning(
                 "PVSC: Benachrichtigung über %s fehlgeschlagen: %s", notify_entity, err
             )
+
+    async def _maybe_notify_modbus_change(self) -> None:
+        """Meldung bei Verbindungsverlust/-wiederherstellung zur Wallbox.
+
+        Während die Modbus-Verbindung down ist, werden weder aktuelle
+        Wallbox-Werte gelesen NOCH neue Ampere/Start/Stopp-Befehle
+        geschrieben - die physische Wallbox bleibt auf ihrem letzten
+        erfolgreich übermittelten Stand "eingefroren", während sich PV,
+        Hauslast und damit der berechnete Zielwert im Hintergrund munter
+        weiterändern (nur eben wirkungslos). Ohne diese Meldung fällt ein
+        WLAN-/Verbindungsausfall zur Wallbox sonst erst auf, wenn jemand
+        zufällig die Modbus-Diagnose-Sensoren prüft oder das Auto mit einer
+        Ladeleistung lädt, die zum aktuellen Überschuss nicht mehr passt.
+
+        Schwelle MODBUS_NOTIFY_THRESHOLD statt sofort beim ersten Fehler,
+        um keine Meldung wegen eines einzelnen Timeout-Ausreißers zu
+        verschicken. Die "wieder verbunden"-Meldung kommt nur, wenn zuvor
+        tatsächlich eine "Verbindung verloren"-Meldung verschickt wurde."""
+        if not self.entry.options.get("notify_enabled", True):
+            return
+        notify_entity = self.entry.options.get("notify_entity", DEFAULT_NOTIFY_ENTITY)
+        if not notify_entity:
+            return
+
+        en = self._lang() == "en"
+
+        if not self.modbus_ok:
+            if (
+                not self._modbus_down_notified
+                and self.modbus_consecutive_failures >= MODBUS_NOTIFY_THRESHOLD
+            ):
+                self._modbus_down_notified = True
+                if en:
+                    message = (
+                        "Wallbox: connection lost\n"
+                        f"{self.modbus_consecutive_failures} consecutive Modbus errors\n"
+                        "The wallbox is now frozen at its last known ampere/state - "
+                        "it will NOT react to changing PV surplus until the "
+                        "connection is back."
+                    )
+                else:
+                    message = (
+                        "Wallbox: Verbindung verloren\n"
+                        f"{self.modbus_consecutive_failures} Modbus-Fehler in Folge\n"
+                        "Die Wallbox lädt jetzt eingefroren mit ihrem letzten "
+                        "bekannten Ampere-Wert weiter - sie reagiert NICHT mehr "
+                        "auf den PV-Überschuss, bis die Verbindung wieder da ist."
+                    )
+                await self._send_notify(notify_entity, message)
+        elif self._modbus_down_notified:
+            self._modbus_down_notified = False
+            message = (
+                "Wallbox: connection restored" if en else "Wallbox: Verbindung wiederhergestellt"
+            )
+            await self._send_notify(notify_entity, message)
 
     def _sync_state_from_em2go(self) -> None:
         """Gleicht self.state IMMER an den tatsächlichen (gelesenen oder
