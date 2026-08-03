@@ -110,9 +110,11 @@ class PVSCCorrectionAutoSwitch(PVSCEntity, SwitchEntity):
 class PVSCPhaseAutoSwitch(PVSCEntity, SwitchEntity):
     """Optionale automatische 1<->3-Phasenumschaltung im PV-Modus.
 
-    AN: Bei dauerhaft hohem Überschuss (> PHASE_UP_WATTS für 5 Min) wird
-    auf 3 Phasen hochgeschaltet, bei dauerhaft niedrigem (< PHASE_DOWN_WATTS
-    für 5 Min) zurück auf 1 Phase. AUS (Standard): im PV-Modus immer 1-phasig.
+    AN: Bei dauerhaft hohem Überschuss (> Hochschalt-Schwelle für 5 Min)
+    wird auf 3 Phasen hochgeschaltet, bei dauerhaft niedrigem (< Runterschalt-
+    Schwelle für 5 Min) zurück auf 1 Phase - die Schwellen richten sich nach
+    der Option "car_charge_phases" (Konfigurieren-Dialog). AUS (Standard):
+    im PV-Modus immer 1-phasig.
     """
 
     _attr_icon = "mdi:sine-wave"

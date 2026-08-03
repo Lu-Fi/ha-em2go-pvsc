@@ -78,6 +78,7 @@
           "modbus_connect_settle_delay": "Modbus Pause nach frischem Verbindungsaufbau vor erster Anfrage (Sekunden)",
           "modbus_framing": "Modbus Framing: 'rtu' (rohe RTU-Rahmen, vermutlich richtig für diese Wallbox) oder 'mbap' (echtes Modbus-TCP)",
           "max_ampere": "Maximaler Ladestrom (A, 16 bei 11-kW-, 32 bei 22-kW-Version)",
+          "car_charge_phases": "Phasen, die das Auto beim 3-phasigen Laden tatsächlich nutzt (manche Autos laden auch bei 3-phasig angebotenem Strom nur auf 2 Phasen) - bestimmt die Schwellen der automatischen Phasenumschaltung",
           "state_change_on_delay": "Start-Verzögerung (Sekunden) - so lange muss der Überschuss über dem Minimum liegen, bevor tatsächlich geladen wird",
           "state_change_off_delay": "Stopp-Verzögerung (Sekunden) - so lange muss der Überschuss unzureichend sein, bevor die Ladung tatsächlich beendet wird",
           "ampere_change_delay": "Ampere-Anpassungsverzögerung (Sekunden) - so lange muss der Ziel-Strom abweichen, bevor die Vorgabe an der Wallbox angepasst wird",

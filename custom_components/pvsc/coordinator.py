@@ -28,6 +28,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     AMPERE_CHANGE_INTERVAL,
     DEFAULT_AMPERE_CHANGE_DELAY,
+    DEFAULT_CAR_CHARGE_PHASES,
     DEFAULT_ENABLED,
     DEFAULT_MODBUS_FRAMING,
     DEFAULT_NOTIFY_ENTITY,
@@ -50,8 +51,8 @@ from .const import (
     ACTION_START,
     ACTION_STOP,
     PHASE_CHANGE_DELAY,
-    PHASE_DOWN_WATTS,
-    PHASE_UP_WATTS,
+    PHASE_DOWN_AMPERE,
+    PHASE_UP_AMPERE,
     STATE_CHANGE_INTERVAL,
     STOP_CAUSE_HIGH_BATTERY_USAGE,
     STOP_CAUSE_LOW_SOC,
@@ -971,13 +972,22 @@ class PVSCCoordinator:
             # PV-Modus: Standard ist 1-phasig. Mit aktivierter Phasen-
             # automatik wird während des Ladens auf 3 Phasen hochgeschaltet,
             # wenn der Auto-Überschuss PHASE_CHANGE_DELAY lang über
-            # PHASE_UP_WATTS liegt - und zurück auf 1 Phase, wenn er so
-            # lange unter PHASE_DOWN_WATTS fällt (Hysterese gegen Flattern).
+            # phase_up_watts liegt - und zurück auf 1 Phase, wenn er so
+            # lange unter phase_down_watts fällt (Hysterese gegen Flattern).
+            # car_charge_phases (Options-Flow, Default 3): manche Autos
+            # laden auch bei 3-phasig angebotenem Strom nur auf 2 Phasen -
+            # für die ist car_charge_phases=2 zu setzen, sonst passen die
+            # Schwellen nicht zum real erreichbaren Minimum (GitHub #1).
+            car_charge_phases = self.entry.options.get(
+                "car_charge_phases", DEFAULT_CAR_CHARGE_PHASES
+            )
+            phase_up_watts = PHASE_UP_AMPERE * car_charge_phases * VOLT
+            phase_down_watts = PHASE_DOWN_AMPERE * car_charge_phases * VOLT
             desired_phases = 1
             if s.get("phase_auto") and self.state and em2go["plug"] == 1:
                 if em2go["phases"] == 3:
                     desired_phases = 3
-                    if car_surplus < PHASE_DOWN_WATTS:
+                    if car_surplus < phase_down_watts:
                         if not self.phase_change_ts:
                             self.phase_change_ts = now
                         elif (now - self.phase_change_ts) > PHASE_CHANGE_DELAY:
@@ -986,7 +996,7 @@ class PVSCCoordinator:
                     else:
                         self.phase_change_ts = 0
                 else:
-                    if car_surplus > PHASE_UP_WATTS:
+                    if car_surplus > phase_up_watts:
                         if not self.phase_change_ts:
                             self.phase_change_ts = now
                         elif (now - self.phase_change_ts) > PHASE_CHANGE_DELAY:

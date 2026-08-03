@@ -78,6 +78,7 @@
           "modbus_connect_settle_delay": "Modbus settle delay after a fresh connection (seconds)",
           "modbus_framing": "Modbus framing: 'mbap' (standard Modbus TCP, correct for the EM2GO) or 'rtu' (raw RTU frames, test fallback)",
           "max_ampere": "Maximum charging current (A, 16 for 11 kW, 32 for 22 kW model)",
+          "car_charge_phases": "Phases the car actually uses when charging on the 3-phase setting (some cars only ever draw 2 phases even when 3 are offered) - determines the automatic phase-switching thresholds",
           "state_change_on_delay": "Start delay (seconds) - how long the surplus must exceed the minimum before charging actually starts",
           "state_change_off_delay": "Stop delay (seconds) - how long the surplus must be insufficient before charging actually stops",
           "ampere_change_delay": "Current adjustment delay (seconds) - how long the target current must differ before the wallbox setpoint is adjusted",

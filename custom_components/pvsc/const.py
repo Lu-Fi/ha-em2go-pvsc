@@ -127,14 +127,22 @@ DEFAULT_OVERRIDE_PHASES = 1
 
 # Automatische 1<->3-Phasenumschaltung (optional, switch.pvsc_phase_auto):
 # Hochschalten, wenn der Auto-Überschuss PHASE_CHANGE_DELAY lang über
-# PHASE_UP_WATTS liegt; runterschalten, wenn er so lange unter
-# PHASE_DOWN_WATTS fällt. PHASE_UP_WATTS liegt bewusst über dem
-# 3-phasigen Minimum (6 A x 3 x 230 V = 4140 W), damit nach dem
-# Hochschalten nicht sofort wieder runtergeschaltet werden muss.
+# phase_up_watts liegt; runterschalten, wenn er so lange unter
+# phase_down_watts fällt. PHASE_UP_AMPERE liegt bewusst über
+# PHASE_DOWN_AMPERE, damit nach dem Hochschalten nicht sofort wieder
+# runtergeschaltet werden muss.
+#
+# phase_up_watts/phase_down_watts werden im Coordinator aus
+# PHASE_UP_AMPERE/PHASE_DOWN_AMPERE x car_charge_phases x VOLT berechnet,
+# NICHT fest mit 3 Phasen - manche Autos laden auch bei 3-phasig
+# angebotenem Strom nur auf 2 Phasen (GitHub Issue #1), dann liegt das
+# reale Minimum bei 6 A x 2 x 230 V = 2760 W statt 4140 W. car_charge_phases
+# ist daher pro Wallbox über den Options-Flow einstellbar (Default: 3).
 DEFAULT_PHASE_AUTO = False
+DEFAULT_CAR_CHARGE_PHASES = 3
 PHASE_CHANGE_DELAY = 5 * 60  # Sekunden stabile Über-/Unterschreitung
-PHASE_UP_WATTS = 7 * 3 * 230    # 4830 W
-PHASE_DOWN_WATTS = 6 * 3 * 230  # 4140 W
+PHASE_UP_AMPERE = 7
+PHASE_DOWN_AMPERE = 6
 
 # Werkseinstellungen für die "live" number/switch/select Werte. Werden beim
 # ersten Start eines Config-Entries verwendet, beim "Reset to Default"-Button

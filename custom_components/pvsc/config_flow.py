@@ -14,6 +14,7 @@ from .const import (
     DEFAULT_AMPERE_CHANGE_DELAY,
     DEFAULT_AMPERE_DEADBAND,
     DEFAULT_BATTERY_KWH,
+    DEFAULT_CAR_CHARGE_PHASES,
     DEFAULT_STATE_CHANGE_OFF_DELAY,
     DEFAULT_STATE_CHANGE_ON_DELAY,
     DEFAULT_INVERTER_MAX_OUTPUT,
@@ -251,6 +252,15 @@ class PVSCOptionsFlow(config_entries.OptionsFlow):
                     "max_ampere",
                     default=opts.get("max_ampere", MAX_A),
                 ): vol.All(vol.Coerce(int), vol.Range(min=6, max=32)),
+                # Manche Autos laden auch bei 3-phasig angebotenem Strom nur
+                # auf 2 Phasen - dann muss die automatische Phasenumschaltung
+                # (switch.pvsc_phase_auto) ihre Hochschalt-/Runterschalt-
+                # schwellen auf 2 statt 3 Phasen rechnen, sonst passen sie
+                # nicht zum real erreichbaren Minimum (GitHub Issue #1).
+                vol.Required(
+                    "car_charge_phases",
+                    default=opts.get("car_charge_phases", DEFAULT_CAR_CHARGE_PHASES),
+                ): vol.In([2, 3]),
                 # Hysterese-Delays und Ampere-Totband: seit 0.5.0b10 wieder
                 # hier (statt als number-Entities) - Parameter, die selten
                 # geändert werden. Pro Config-Eintrag = pro Wallbox.
