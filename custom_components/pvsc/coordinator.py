@@ -978,8 +978,8 @@ class PVSCCoordinator:
             # laden auch bei 3-phasig angebotenem Strom nur auf 2 Phasen -
             # für die ist car_charge_phases=2 zu setzen, sonst passen die
             # Schwellen nicht zum real erreichbaren Minimum (GitHub #1).
-            car_charge_phases = self.entry.options.get(
-                "car_charge_phases", DEFAULT_CAR_CHARGE_PHASES
+            car_charge_phases = int(
+                self.entry.options.get("car_charge_phases", DEFAULT_CAR_CHARGE_PHASES)
             )
             phase_up_watts = PHASE_UP_AMPERE * car_charge_phases * VOLT
             phase_down_watts = PHASE_DOWN_AMPERE * car_charge_phases * VOLT

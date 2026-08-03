@@ -257,10 +257,21 @@ class PVSCOptionsFlow(config_entries.OptionsFlow):
                 # (switch.pvsc_phase_auto) ihre Hochschalt-/Runterschalt-
                 # schwellen auf 2 statt 3 Phasen rechnen, sonst passen sie
                 # nicht zum real erreichbaren Minimum (GitHub Issue #1).
+                #
+                # Explizit als SelectSelector (Dropdown) statt vol.In([2, 3]):
+                # ein reines vol.In mit wenigen Werten rendert das Formular
+                # als Radio-Buttons, zeigt dabei aber den default-Wert nicht
+                # vorausgewählt an. Werte als Strings, da SelectSelector sie
+                # so speichert - beim Lesen im Coordinator daher int(...).
                 vol.Required(
                     "car_charge_phases",
-                    default=opts.get("car_charge_phases", DEFAULT_CAR_CHARGE_PHASES),
-                ): vol.In([2, 3]),
+                    default=str(opts.get("car_charge_phases", DEFAULT_CAR_CHARGE_PHASES)),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=["2", "3"],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
                 # Hysterese-Delays und Ampere-Totband: seit 0.5.0b10 wieder
                 # hier (statt als number-Entities) - Parameter, die selten
                 # geändert werden. Pro Config-Eintrag = pro Wallbox.
