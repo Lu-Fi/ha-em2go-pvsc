@@ -2,6 +2,18 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.2b1] - 2026-08-03 (prerelease)
+
+### Added
+
+- **Configurable phase-switching thresholds** (`car_charge_phases` option, `2` or `3`, default `3`): automatic 1↔3-phase switching (`switch.pvsc_phase_auto`) derives its up-/down-switch thresholds from how many phases the car actually draws when charging at the "3-phase" setting, instead of always assuming 3. Some cars only ever use 2 phases even when 3 are offered, for which the fixed thresholds didn't match the real achievable minimum (closes #1).
+- **Modbus connection-loss notification**: sends "connection lost"/"connection restored" via the same notify target as charging start/stop when the wallbox Modbus link drops for `MODBUS_NOTIFY_THRESHOLD` (3) consecutive failures. While down, the wallbox keeps charging at its last successfully written ampere/state — PV and load keep changing in the background, but the hardware never sees the new target, which was otherwise invisible until someone checked the Modbus diagnostic sensors.
+
+### Fixed
+
+- Charging start/stop and the new Modbus connection notification now call `telegram_bot.send_message` with `parse_mode: plain_text` and wait for completion, instead of the generic `notify.send_message` action with `blocking=False`. That combination sent Markdown-parsed messages that silently failed (Telegram `BadRequest: can't parse entities`) whenever the text contained hyphens or periods — common in these messages — with the failure swallowed in a detached background task instead of being logged.
+- The `car_charge_phases` options-flow field didn't visually pre-select its default value (rendered as radio buttons via a plain `vol.In`, unlike the sliders/number fields elsewhere in the same form). Now an explicit dropdown selector.
+
 ## [0.5.1b1] - 2026-07-08 (prerelease)
 
 ### Added

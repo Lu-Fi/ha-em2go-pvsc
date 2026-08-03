@@ -16,9 +16,9 @@ Home Assistant custom integration that controls an **EM2GO Home wallbox** via Mo
 - Optional home battery support: SOC-based charging thresholds, battery assist, automatic correction factor
 - Works **without** a home battery (fixed correction factor, no SOC gating)
 - Override modes: PV automatic, manual (fixed amps/phases), stop
-- Optional automatic 1↔3 phase switching with hysteresis (5 min above ~4.8 kW → 3 phases, 5 min below ~4.1 kW → back to 1 phase)
+- Optional automatic 1↔3 phase switching with hysteresis (5 min above ~4.8 kW → 3 phases, 5 min below ~4.1 kW → back to 1 phase); thresholds adapt to cars that only charge on 2 of the 3 offered phases (`car_charge_phases` option)
 - Start/stop hysteresis, current-adjustment delay and amps deadband, configurable per wallbox via the entry's Options dialog; amp ramping, rate limiting (max. 3 switch operations per 15 min)
-- Optional notifications on charge start/stop via any `notify` entity (Telegram, mobile app, …)
+- Optional notifications on charge start/stop and on Modbus connection loss/restore, via any `notify` entity (Telegram, mobile app, …)
 - Safe observation: the wallbox state is always read via Modbus, but the integration only writes while the "Control active" switch is on — turn it off to watch and simulate decisions without touching the hardware
 - Companion Lovelace card included and auto-registered — just add a card of type `custom:pvsc-card` to any dashboard (no manual resource setup needed); the card has a visual editor with a wallbox dropdown (or set the `prefix` option in YAML) to bind it to a specific wallbox
 - Multiple wallboxes supported: one config entry per wallbox, each with its own entity ID prefix, its own live settings, options and delays
