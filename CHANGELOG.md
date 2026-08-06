@@ -2,6 +2,12 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.2b2] - 2026-08-06 (prerelease)
+
+### Fixed
+
+- **`car_charge_phases` only fixed the phase-switching thresholds, not the actual target-current calculation** (follow-up report on #1): with a 2-phase-only car and the wallbox in 3-phase mode, `target_ampere` (and the multi-wallbox fleet-power-budget calculation) still divided the desired power by 3 real phases instead of 2, so the wallbox systematically undershot the available surplus — e.g. a 5182 W surplus only resulted in ~3.45 kW of actual draw instead of ~5.2 kW. Both calculations now use `min(wallbox_phases, car_charge_phases)` instead of the raw wallbox-reported phase count. The start/stop power threshold (`min_watts`) is adjusted the same way for consistency, though it only mattered for the narrow case of a 2-phase car with automatic phase switching turned off.
+
 ## [0.5.2b1] - 2026-08-03 (prerelease)
 
 ### Added

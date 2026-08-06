@@ -870,13 +870,25 @@ class PVSCCoordinator:
         min_a = 6 + (0 if self.state else 1)
         # Maximaler Ladestrom per Option (16 A = 11-kW-, 32 A = 22-kW-Version)
         max_a = self.entry.options.get("max_ampere", MAX_A)
+        # car_charge_phases (Options-Flow, Default 3): manche Autos laden
+        # auch bei 3-phasig angebotenem Strom nur auf 2 Phasen. Wird unten
+        # ueberall dort statt der rohen em2go["phases"] verwendet, wo aus
+        # einer Watt-Vorgabe ein Ampere-Zielwert (oder umgekehrt) berechnet
+        # wird - sonst bleibt der Zielwert systematisch zu niedrig (GitHub #1,
+        # Nachmeldung nach 0.5.2b1: der erste Fix deckte nur die
+        # Umschalt-Schwellen phase_up_watts/phase_down_watts ab, nicht diese
+        # Umrechnungen).
+        car_charge_phases = int(
+            self.entry.options.get("car_charge_phases", DEFAULT_CAR_CHARGE_PHASES)
+        )
         # Mindestleistung für die Start/Stopp-Entscheidung: Bei aktiver
         # Phasenautomatik zählt das 1-PHASIGE Minimum - fällt der Überschuss
-        # unter das 3-phasige Minimum, wird runtergeschaltet statt gestoppt.
+        # unter das 3-phasige (bzw. bei car_charge_phases=2: 2-phasige)
+        # Minimum, wird runtergeschaltet statt gestoppt.
         min_phases = em2go["phases"] if em2go["phases"] in (1, 3) else 1
         if s.get("phase_auto"):
             min_phases = 1
-        min_watts = min_a * min_phases * VOLT
+        min_watts = min_a * min(min_phases, car_charge_phases) * VOLT
 
         # ── Überschussberechnung ────────────────────────────────────
         surplus_mode = s["surplus_mode"]
@@ -959,7 +971,9 @@ class PVSCCoordinator:
             self.surplus = surplus - car_surplus
         self.car_surplus = car_surplus
 
-        target_ampere = round(car_surplus / (VOLT * max(em2go["phases"], 1)) * 10) / 10
+        effektive_phasen = min(max(em2go["phases"], 1), car_charge_phases)
+
+        target_ampere = round(car_surplus / (VOLT * effektive_phasen) * 10) / 10
         target_ampere = min(max_a, max(min_a, target_ampere))
 
         if override_mode == "manual":
@@ -974,13 +988,6 @@ class PVSCCoordinator:
             # wenn der Auto-Überschuss PHASE_CHANGE_DELAY lang über
             # phase_up_watts liegt - und zurück auf 1 Phase, wenn er so
             # lange unter phase_down_watts fällt (Hysterese gegen Flattern).
-            # car_charge_phases (Options-Flow, Default 3): manche Autos
-            # laden auch bei 3-phasig angebotenem Strom nur auf 2 Phasen -
-            # für die ist car_charge_phases=2 zu setzen, sonst passen die
-            # Schwellen nicht zum real erreichbaren Minimum (GitHub #1).
-            car_charge_phases = int(
-                self.entry.options.get("car_charge_phases", DEFAULT_CAR_CHARGE_PHASES)
-            )
             phase_up_watts = PHASE_UP_AMPERE * car_charge_phases * VOLT
             phase_down_watts = PHASE_DOWN_AMPERE * car_charge_phases * VOLT
             desired_phases = 1
@@ -1052,7 +1059,7 @@ class PVSCCoordinator:
         if fleet_limit > 0:
             higher_power = sum(max(p.em2go["power"], 0.0) for p in higher)
             budget = fleet_limit - higher_power
-            budget_a = int(budget / (VOLT * max(em2go["phases"], 1)) * 10) / 10
+            budget_a = int(budget / (VOLT * effektive_phasen) * 10) / 10
             if budget_a < min_a:
                 self._fleet_blocked = True
             elif budget_a < target_ampere:
