@@ -2,6 +2,12 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.2b3] - 2026-08-21 (prerelease)
+
+### Fixed
+
+- **`hacs.json` declared a Home Assistant floor (`2024.6.0`) the integration couldn't actually run on.** `__init__.py` imports `StaticPathConfig` and calls `hass.http.async_register_static_paths`, both introduced in 2024.7 — on the declared floor, setup would raise `ImportError` immediately. The in-tree brand icons need 2026.3 on top of that (already noted in the README). Raised the floor to `2026.3.0` to match reality.
+
 ## [0.5.2b2] - 2026-08-06 (prerelease)
 
 ### Fixed
