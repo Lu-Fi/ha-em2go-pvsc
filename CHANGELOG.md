@@ -2,6 +2,21 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.2] - 2026-08-21
+
+Stable release consolidating the 0.5.2b1–b3 prereleases below.
+
+### Added
+
+- **Configurable phase-switching thresholds** (`car_charge_phases` option, `2` or `3`, default `3`): automatic 1↔3-phase switching (`switch.pvsc_phase_auto`) derives its up-/down-switch thresholds from how many phases the car actually draws when charging at the "3-phase" setting, instead of always assuming 3, and now also drives the target-current/fleet-power-budget calculation itself — a 2-phase-only car no longer has its target ampere/power systematically undershot by dividing by 3 real phases instead of 2 (closes #1).
+- **Modbus connection-loss notification**: sends "connection lost"/"connection restored" via the same notify target as charging start/stop when the wallbox Modbus link drops for 3 consecutive failures.
+
+### Fixed
+
+- Notifications (charging start/stop, Modbus connection loss) now call `telegram_bot.send_message` with `parse_mode: plain_text` and wait for completion, instead of the generic `notify.send_message` action with `blocking=False` — the latter silently swallowed Telegram's `BadRequest: can't parse entities` failures on message text containing hyphens or periods.
+- The `car_charge_phases` options-flow field now uses an explicit dropdown selector so its default value is visibly pre-selected.
+- `hacs.json`'s declared Home Assistant floor raised from `2024.6.0` to `2026.3.0`, matching what `StaticPathConfig`/`async_register_static_paths` and the in-tree brand icons actually require.
+
 ## [0.5.2b3] - 2026-08-21 (prerelease)
 
 ### Fixed
