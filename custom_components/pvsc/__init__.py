@@ -9,12 +9,12 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from homeassistant.components import persistent_notification
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from homeassistant.loader import async_get_integration
 
 from .const import DOMAIN, PLATFORMS
 from .coordinator import PVSCCoordinator
@@ -24,10 +24,41 @@ _LOGGER = logging.getLogger(__name__)
 CARD_URL = "/pvsc/pvsc-card.js"
 
 
+async def _async_register_lovelace_resource(hass: HomeAssistant, url: str) -> bool:
+    """Registriert die Card als echte Lovelace-Resource (Storage-Mode), statt
+    sich auf add_extra_js_url zu verlassen: Resourcen werden vom Frontend
+    dynamisch pro Dashboard-Aufruf geladen, unabhängig vom (durch den
+    Service-Worker Stale-While-Revalidate gecachten) HTML-Grundgerüst - genau
+    der Mechanismus, über den auch HACS-Karten laufen und der sie gegen
+    dieses Cache-Problem immun macht. Gibt True zurück, wenn erfolgreich
+    registriert (dann kann der add_extra_js_url-Fallback entfallen)."""
+    lovelace_data = hass.data.get("lovelace")
+    if lovelace_data is None:
+        return False
+    resources = getattr(lovelace_data, "resources", None)
+    if resources is None or not hasattr(resources, "store") or resources.store is None:
+        return False  # YAML-Mode oder Resource-Handler nicht verfügbar
+    if resources.store.key != "lovelace_resources" or resources.store.version != 1:
+        return False
+
+    if not resources.loaded:
+        await resources.async_load()
+
+    namespace = url.split("?", 1)[0]
+    for item in resources.async_items():
+        if item["url"].split("?", 1)[0] == namespace:
+            if item["url"] != url:
+                await resources.async_update_item(item["id"], {"url": url})
+            return True
+
+    await resources.async_create_item({"res_type": "module", "url": url})
+    return True
+
+
 async def _async_register_card(hass: HomeAssistant) -> None:
     """Liefert die mitgelieferte Lovelace-Card (www/pvsc-card.js) selbst aus
     und lädt sie automatisch auf allen Dashboards - kein manuelles Kopieren
-    nach config/www und keine Dashboard-Resource nötig."""
+    nach config/www nötig."""
     if hass.data.get(f"{DOMAIN}_card_registered"):
         return
     hass.data[f"{DOMAIN}_card_registered"] = True
@@ -38,29 +69,14 @@ async def _async_register_card(hass: HomeAssistant) -> None:
     )
     # Versions-Anhang als Cache-Buster, damit Browser nach Updates die
     # neue Card laden.
-    from homeassistant.loader import async_get_integration
-
     integration = await async_get_integration(hass, DOMAIN)
-    add_extra_js_url(hass, f"{CARD_URL}?v={integration.version}")
+    url = f"{CARD_URL}?v={integration.version}"
 
-    # add_extra_js_url wirkt nur in-memory und wird bei jedem HA-Neustart
-    # neu aufgebaut. Bereits offene Browser-Tabs/Apps kennen die (neu)
-    # registrierte Card erst nach einem harten Neuladen - bis dahin zeigt
-    # jede "custom:pvsc-card" fälschlich "Konfigurationsfehler: Custom
-    # element doesn't exist". Aktive Erinnerung statt stillem Fehlerbild.
-    persistent_notification.async_create(
-        hass,
-        (
-            f"Die pvsc-card (Version {integration.version}) wurde beim "
-            "Start neu registriert. Bereits offene Dashboards/Apps zeigen "
-            "bei 'custom:pvsc-card' bis zu einem harten Neuladen "
-            "fälschlich 'Konfigurationsfehler: Custom element doesn't "
-            "exist: pvsc-card'. Browser: Strg+Shift+R (bzw. Cmd+Shift+R) - "
-            "Companion-App: App beenden und neu öffnen."
-        ),
-        title="PVSC: Karte neu geladen - Browser/App neu laden",
-        notification_id="pvsc_card_reload",
-    )
+    if not await _async_register_lovelace_resource(hass, url):
+        # YAML-Mode-Dashboards kennen keine Storage-Resourcen - hier bleibt
+        # nur add_extra_js_url, mit dem bekannten Nachteil, dass bereits
+        # offene Tabs erst nach hartem Neuladen davon erfahren.
+        add_extra_js_url(hass, url)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

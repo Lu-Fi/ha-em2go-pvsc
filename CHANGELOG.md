@@ -2,6 +2,12 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.3] - 2026-08-26
+
+### Fixed
+
+- **"Konfigurationsfehler: Custom element doesn't exist: pvsc-card" could survive a full close-and-reopen of the tab.** The card was only registered via `add_extra_js_url`, which patches the frontend's HTML shell in memory - a mechanism the frontend's own service worker can poison: it serves the app shell Stale-While-Revalidate, so any navigation that lands inside the brief window between HA answering HTTP requests again and `async_setup_entry` actually running gets cached *without* the pvsc import, and every reopened tab keeps getting served that same stale, import-less shell until the service worker's background revalidation happens to catch up. The card is now additionally (primarily) registered as a real Lovelace storage-mode resource - the same mechanism HACS cards use - which the frontend loads dynamically per dashboard render over the websocket API, independent of the cached HTML shell. `add_extra_js_url` is kept only as a fallback for YAML-mode dashboards, which don't have storage resources. The now-unnecessary "please hard-reload" persistent notification is removed.
+
 ## [0.5.2] - 2026-08-21
 
 Stable release consolidating the 0.5.2b1–b3 prereleases below.
