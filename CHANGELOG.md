@@ -2,6 +2,12 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.4] - 2026-08-30
+
+### Fixed
+
+- **The reconfigure flow combined a config-entry `update_listener` with `async_update_reload_and_abort()`**, which is deprecated as of HA 2026.6 (double-reload/race risk) and becomes a hard error in 2026.12. Switched to `async_update_and_abort()` — the existing `update_listener` already reloads on every entry update, for both the options flow and reconfigure.
+
 ## [0.5.3] - 2026-08-26
 
 ### Fixed

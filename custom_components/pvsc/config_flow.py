@@ -156,7 +156,12 @@ class PVSCConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Ein geändertes id_prefix wird beim Reload von
                 # _async_apply_id_prefix() in __init__.py auf die bestehenden
                 # Entities angewendet (Registry-Umbenennung).
-                return self.async_update_reload_and_abort(
+                # async_update_and_abort statt async_update_reload_and_abort:
+                # der in __init__.py registrierte update_listener reloaded
+                # bei JEDER Entry-Änderung ohnehin schon - beides zusammen
+                # ist seit HA 2026.6 deprecated (Doppel-Reload/Race) und wird
+                # ab 2026.12 zum Error.
+                return self.async_update_and_abort(
                     entry, unique_id=new_unique_id, data=user_input
                 )
 
