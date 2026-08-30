@@ -33,14 +33,14 @@ Home Assistant custom integration that controls an **EM2GO Home wallbox** via Mo
 
 **Lovelace card**
 
-<img src="docs/01-dashboard-card.png" alt="Dashboard card showing charge state, power and PV/manual/stop controls">
+<img src="https://raw.githubusercontent.com/Lu-Fi/ha-em2go-pvsc/main/docs/01-dashboard-card.png" alt="Dashboard card showing charge state, power and PV/manual/stop controls">
 
 </td>
 <td align="center" width="50%">
 
 **Integration overview**
 
-<img src="docs/02-integration-overview.png" alt="Integration entry listing the EM2GO Home Wallbox device with 43 entities">
+<img src="https://raw.githubusercontent.com/Lu-Fi/ha-em2go-pvsc/main/docs/02-integration-overview.png" alt="Integration entry listing the EM2GO Home Wallbox device with 43 entities">
 
 </td>
 </tr>
@@ -49,14 +49,14 @@ Home Assistant custom integration that controls an **EM2GO Home wallbox** via Mo
 
 **Device page — control & activity**
 
-<img src="docs/03-device-page.png" alt="Device page with Steuerung sliders (SOC thresholds, correction factor, override mode) and activity log">
+<img src="https://raw.githubusercontent.com/Lu-Fi/ha-em2go-pvsc/main/docs/03-device-page.png" alt="Device page with Steuerung sliders (SOC thresholds, correction factor, override mode) and activity log">
 
 </td>
 <td align="center" width="50%">
 
 **Configuration & diagnostics**
 
-<img src="docs/05-konfiguration-diagnose.png" alt="Configuration card (phase switching, correction factor) and diagnostics card (Modbus status)">
+<img src="https://raw.githubusercontent.com/Lu-Fi/ha-em2go-pvsc/main/docs/05-konfiguration-diagnose.png" alt="Configuration card (phase switching, correction factor) and diagnostics card (Modbus status)">
 
 </td>
 </tr>
@@ -64,11 +64,11 @@ Home Assistant custom integration that controls an **EM2GO Home wallbox** via Mo
 
 **All sensors**
 
-<img src="docs/04-sensoren.png" alt="Full list of sensor entities exposed by the integration" width="400">
+<img src="https://raw.githubusercontent.com/Lu-Fi/ha-em2go-pvsc/main/docs/04-sensoren.png" alt="Full list of sensor entities exposed by the integration" width="400">
 
 **Options dialog — technical parameters**
 
-<img src="docs/06-technische-parameter.png" alt="Technical parameters options dialog: notifications, power/battery limits, Modbus timing, phase framing, ramping and priority settings" width="450">
+<img src="https://raw.githubusercontent.com/Lu-Fi/ha-em2go-pvsc/main/docs/06-technische-parameter.png" alt="Technical parameters options dialog: notifications, power/battery limits, Modbus timing, phase framing, ramping and priority settings" width="450">
 
 ## EM2GO Modbus quirks (handled by this integration)
 
