@@ -1,4 +1,4 @@
-"""Config- und Options-Flow für PV Überschussladen (Test)."""
+"""Config- und Options-Flow für das EM2GO Home PV-Überschussladen (pvsc)."""
 from __future__ import annotations
 
 import re
@@ -228,18 +228,24 @@ class PVSCOptionsFlow(config_entries.OptionsFlow):
                     "inverter_max_output",
                     default=opts.get("inverter_max_output", DEFAULT_INVERTER_MAX_OUTPUT),
                 ): vol.Coerce(int),
+                # Bereichsgrenzen wie bei den übrigen Zahlenfeldern dieses
+                # Formulars: Ein Poll-Intervall von 0 oder negativ lässt
+                # async_track_time_interval bei jedem Event-Loop-Durchlauf
+                # feuern - der Überlappungsschutz im Coordinator fängt das
+                # zwar ab, protokolliert dann aber im Sekundentakt Warnungen.
+                # Ein Timeout von 0 macht jede Modbus-Anfrage unmöglich.
                 vol.Required(
                     "poll_interval",
                     default=opts.get("poll_interval", DEFAULT_POLL_INTERVAL),
-                ): vol.Coerce(int),
+                ): vol.All(vol.Coerce(int), vol.Range(min=2, max=300)),
                 vol.Required(
                     "modbus_timeout",
                     default=opts.get("modbus_timeout", DEFAULT_MODBUS_TIMEOUT),
-                ): vol.Coerce(float),
+                ): vol.All(vol.Coerce(float), vol.Range(min=0.2, max=30)),
                 vol.Required(
                     "modbus_command_delay",
                     default=opts.get("modbus_command_delay", DEFAULT_MODBUS_COMMAND_DELAY),
-                ): vol.Coerce(float),
+                ): vol.All(vol.Coerce(float), vol.Range(min=0, max=5)),
                 vol.Required(
                     "modbus_reconnect_backoff",
                     default=opts.get(

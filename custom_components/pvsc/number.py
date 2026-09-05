@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from .const import DOMAIN, MAX_A
 from .coordinator import PVSCCoordinator
 from .entity import PVSCEntity
 
@@ -28,6 +28,10 @@ class PVSCNumberDescription:
     entity_category: str | None = None
     getter: Callable[[PVSCCoordinator], float]
     setter: Callable[[PVSCCoordinator, float], None]
+    # Optional: Obergrenze zur Laufzeit aus der Konfiguration bestimmen
+    # (statt der festen max_value). Wird nur beim Anlegen der Entity
+    # ausgewertet; eine Options-Änderung lädt den Eintrag ohnehin neu.
+    max_value_fn: Callable[[PVSCCoordinator], float] | None = None
 
 
 def _set_setting(key: str):
@@ -63,8 +67,13 @@ NUMBERS: tuple[PVSCNumberDescription, ...] = (
     # geändert werden. Die frühere "Test: erzwungene Ampere"-Entity wurde
     # in 0.5.0b10 ersatzlos entfernt.
     PVSCNumberDescription(
-        key="override_ampere", name="Override: Ampere", min_value=6, max_value=16, step=1,
+        # Obergrenze folgt der Option "max_ampere" (16 A = 11-kW-, 32 A =
+        # 22-kW-Wallbox) statt einer festen 16: sonst könnte der Besitzer
+        # einer 22-kW-Box im manuellen Override nie über 16 A stellen,
+        # obwohl die PV-Automatik dort längst höher regeln darf.
+        key="override_ampere", name="Override: Ampere", min_value=6, max_value=MAX_A, step=1,
         unit="A", icon="mdi:current-ac",
+        max_value_fn=lambda c: int(c.entry.options.get("max_ampere", MAX_A)),
         getter=lambda c: c.override["ampere"],
         setter=lambda c, v: c.override.__setitem__("ampere", int(v)),
     ),
@@ -91,7 +100,11 @@ class PVSCNumber(PVSCEntity, NumberEntity):
         self.entity_id = f"number.{coordinator.id_prefix}_{description.key}"
         self._attr_translation_key = description.key
         self._attr_native_min_value = description.min_value
-        self._attr_native_max_value = description.max_value
+        self._attr_native_max_value = (
+            description.max_value_fn(coordinator)
+            if description.max_value_fn
+            else description.max_value
+        )
         self._attr_native_step = description.step
         self._attr_native_unit_of_measurement = description.unit
         self._attr_icon = description.icon

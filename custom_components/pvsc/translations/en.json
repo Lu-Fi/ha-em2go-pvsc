@@ -17,7 +17,7 @@
           "battery_charge_entity": "Sensor: battery charge power (W, optional)",
           "battery_discharge_entity": "Sensor: battery discharge power (W, optional)",
           "home_soc_entity": "Sensor: home battery SOC (%, optional - without it, no battery logic is applied)",
-          "pv_forecast_entity": "Sensor: PV forecast for the rest of the day (kWh, optional)",
+          "pv_forecast_entity": "Sensor: PV forecast for the rest of the day (kWh, optional - without it, your configured SOC levels stay in effect unchanged)",
           "car_soc_entity": "Sensor: car state of charge (%, optional, display only)",
           "car_end_entity": "Sensor: car charge end time (optional, display only)",
           "car_location_entity": "Device tracker: car location (optional - if empty, home presence is not checked)",
@@ -41,7 +41,7 @@
           "battery_charge_entity": "Sensor: battery charge power (W, optional)",
           "battery_discharge_entity": "Sensor: battery discharge power (W, optional)",
           "home_soc_entity": "Sensor: home battery SOC (%, optional - without it, no battery logic is applied)",
-          "pv_forecast_entity": "Sensor: PV forecast for the rest of the day (kWh, optional)",
+          "pv_forecast_entity": "Sensor: PV forecast for the rest of the day (kWh, optional - without it, your configured SOC levels stay in effect unchanged)",
           "car_soc_entity": "Sensor: car state of charge (%, optional, display only)",
           "car_end_entity": "Sensor: car charge end time (optional, display only)",
           "car_location_entity": "Device tracker: car location (optional - if empty, home presence is not checked)",
@@ -52,7 +52,7 @@
       }
     },
     "abort": {
-      "already_configured": "Diese Wallbox ist bereits konfiguriert.",
+      "already_configured": "This wallbox is already configured.",
       "reconfigure_successful": "Reconfiguration successful."
     },
     "error": {

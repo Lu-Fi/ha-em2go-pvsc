@@ -1,4 +1,4 @@
-"""Schalter der PV Überschussladen (Test) Integration."""
+"""Schalter der Integration EM2GO Home PV-Überschussladen (pvsc)."""
 from __future__ import annotations
 
 from homeassistant.components.switch import SwitchEntity, SwitchDeviceClass

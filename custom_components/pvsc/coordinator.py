@@ -151,7 +151,14 @@ class PVSCCoordinator:
         # --- eigener Regel-Zustand (Äquivalent zu psc.* im Flow) ---
         self.state = False
         self.target_state = False
+        # Schattenwert: welchen Ladestrom hat die Wallbox zuletzt von UNS
+        # kommandiert bekommen. Wird beim ersten erfolgreichen Modbus-Poll
+        # aus dem Rücklese-Register übernommen (siehe _ampere_seeded), damit
+        # nach einem HA-Neustart mitten im Laden nicht fälschlich MIN_A
+        # angenommen wird - sonst hielte die Hysterese den echten Wert für
+        # bereits erreicht bzw. schriebe unnötig.
         self.ampere = MIN_A
+        self._ampere_seeded = False
         self.target_ampere: float = -1
         self.ampere_change_ts = 0.0
         self.state_change_ts = 0.0
@@ -209,8 +216,22 @@ class PVSCCoordinator:
         self.has_car_soc = False
         self.has_pv1 = False
         self.has_battery = True
+        # Ist eine PV-Prognose-Entity konfiguriert? Sie ist ausdrücklich
+        # OPTIONAL - ohne sie bleibt self.pv_forecast dauerhaft 0.0. Alle
+        # Stellen, die aus einer NIEDRIGEN Prognose strengere Regeln ableiten
+        # (SOC-Stufen, Nachmittags-Korrekturfaktor), müssen deshalb auf dieses
+        # Flag prüfen: ohne Sensor gibt es keine "schlechte Prognose", sondern
+        # gar keine Prognose - sonst gelten die verschärften Werte permanent
+        # und überstimmen stillschweigend die vom Nutzer eingestellten
+        # SOC-Grenzen (siehe _calculate()).
+        self.has_pv_forecast = False
         self.core_ready = True
         self.core_ready_fields = ["pv", "load", "import", "export"]
+        # Tatsächlich wirksame Untergrenze für den Heimspeicher-SOC in diesem
+        # Tick (kann bei schlechter PV-Prognose über dem eingestellten
+        # min_soc liegen) - nur für ehrliche Status-Texte, siehe
+        # _build_status_text().
+        self._effective_min_soc = self.settings["min_soc"]
 
         self._modbus: ModbusTcpClient | None = None
         self._entities_to_update: list = []
@@ -278,6 +299,7 @@ class PVSCCoordinator:
         self.has_car_location = bool(data.get("car_location_entity"))
         self.has_car_soc = bool(data.get("car_soc_entity"))
         self.has_pv1 = bool(data.get("pv1_entity"))
+        self.has_pv_forecast = bool(data.get("pv_forecast_entity"))
         # Heimspeicher optional: ohne home_soc_entity entfallen SOC-Stufen,
         # SOC-Gate und Batterie-Unterstützung (Korrekturfaktor fix 1.0
         # bzw. manueller Wert).
@@ -638,7 +660,17 @@ class PVSCCoordinator:
         mit blocking=False liefen. parse_mode=plain_text umgeht das.
         Setzt voraus, dass notify_entity von der telegram_bot-Integration
         stammt (wie in dieser Installation der Fall) - keine generische
-        Lösung für beliebige notify-Plattformen mehr."""
+        Lösung für beliebige notify-Plattformen mehr.
+
+        Der Service-Aufruf läuft als eigener Task: Er wird zwar weiterhin mit
+        blocking=True abgewartet und sein Fehler geloggt (genau das war der
+        Fix aus 0.5.2 - mit blocking=False scheiterte der Versand lautlos),
+        aber eben NICHT im Regel-Tick. Sonst würde eine langsame oder
+        hängende Telegram-API die Ladesteuerung für diese Zeit anhalten -
+        inklusive eines fälligen Stopps."""
+        self.hass.async_create_task(self._async_do_notify(notify_entity, message))
+
+    async def _async_do_notify(self, notify_entity: str, message: str) -> None:
         try:
             await self.hass.services.async_call(
                 "telegram_bot",
@@ -747,6 +779,18 @@ class PVSCCoordinator:
             self.em2go["mode"] = values["mode"][0]
             self.em2go["phases"] = values["phases"][0]
 
+            # Schattenwert self.ampere EINMALIG mit dem echten Register-Wert
+            # abgleichen. Ohne das startet die Integration nach jedem
+            # HA-Neustart mit der Annahme "Wallbox steht auf MIN_A" - lädt das
+            # Auto gerade mit 13 A, hält die Hysterese den (falschen)
+            # Schattenwert für maßgeblich und trifft ihre Entscheidungen auf
+            # dieser Basis. Bewusst NUR beim ersten erfolgreichen Poll: ein
+            # dauerhafter Abgleich würde auch fremde Änderungen (App, andere
+            # Steuerung) übernehmen und damit die eigene Regelung verwässern.
+            if not self._ampere_seeded and self.em2go["ampere"] > 0:
+                self._ampere_seeded = True
+                self.ampere = self.em2go["ampere"]
+
             self.modbus_ok = True
             self.modbus_last_error = None
         except ModbusCooldownError as err:
@@ -761,6 +805,23 @@ class PVSCCoordinator:
             self._modbus_error_ts.append(time.time())
             _LOGGER.warning("PVSC Modbus-Fehler: %s", err)
 
+    def _rollback_state_change(self, change: dict) -> None:
+        """Nimmt die in _calculate() vorweggenommene Zustandsänderung zurück,
+        wenn der Schreibvorgang NICHT stattgefunden hat (Rate-Limit oder
+        Modbus-Fehler). Ohne das Zurücksetzen von last_state_change_ts würde
+        das Mindestintervall zwischen zwei Schaltvorgängen auf einen
+        Vorgang gezählt, der nie passiert ist, und den Wiederholversuch
+        zusätzlich verzögern."""
+        self.state = change["old"]
+        self.state_change_ts = 0
+        self.last_state_change_ts = change["prev_last_ts"]
+
+    def _rollback_ampere_change(self, change: dict) -> None:
+        """Wie _rollback_state_change(), nur für den Ladestrom."""
+        self.ampere = change["old"]
+        self.ampere_change_ts = 0
+        self.last_ampere_change_ts = change["prev_last_ts"]
+
     async def _apply_changes(self, changes: dict) -> None:
         if not self.control_enabled:
             _LOGGER.debug(
@@ -770,33 +831,69 @@ class PVSCCoordinator:
             return
         assert self._modbus is not None
 
+        # Wird True, wenn ein geplanter Zustandswechsel NICHT stattgefunden
+        # hat. Ein in derselben Runde geplanter Ampere-Wert gehört dann zu
+        # einem Ladevorgang, der gar nicht startet - er würde sonst in die
+        # stehende Wallbox geschrieben.
+        state_change_dropped = False
+
         if "state" in changes:
             now_ts = time.time()
+            new_state = changes["state"]["new"]
             recent = [t for t in self.switch_history if now_ts - t < SWITCH_RATE_LIMIT_WINDOW]
-            if len(recent) >= SWITCH_RATE_LIMIT_MAX:
+            # Das Rate-Limit gilt bewusst NUR für STARTS. Ein Stopp ist immer
+            # die sichere Richtung: Wird er blockiert, lädt das Auto weiter
+            # Netzstrom, obwohl die Regelung (oder der Nutzer per
+            # Override "Stop") ihn ausdrücklich beenden will. Vorher zählte
+            # jeder Schaltversuch in beide Richtungen mit, sodass z.B.
+            # Start -> Wolke -> Stopp -> Sonne -> Start das Kontingent
+            # aufbrauchte und ein anschließender Nutzer-Stopp bis zu 15
+            # Minuten lang ignoriert wurde.
+            if new_state and len(recent) >= SWITCH_RATE_LIMIT_MAX:
                 _LOGGER.warning(
-                    "PVSC Rate-Limit: %d Schaltvorgänge in 15 Min - Schaltung blockiert",
+                    "PVSC Rate-Limit: %d Schaltvorgänge in 15 Min - Start blockiert",
                     len(recent),
                 )
-                self.state = changes["state"]["old"]
-                self.state_change_ts = 0
+                self._rollback_state_change(changes["state"])
+                state_change_dropped = True
             else:
-                recent.append(now_ts)
-                self.switch_history = recent
                 try:
                     await self._modbus.write_single_register(
-                        REG_ACTION, ACTION_START if changes["state"]["new"] else ACTION_STOP
+                        REG_ACTION, ACTION_START if new_state else ACTION_STOP
                     )
                 except ModbusError as err:
                     _LOGGER.error("PVSC: Fehler beim Schreiben von state: %s", err)
+                    self._rollback_state_change(changes["state"])
+                    state_change_dropped = True
+                else:
+                    # Erst ein BESTÄTIGT geschriebener Schaltvorgang zählt
+                    # gegen das Rate-Limit. Vorher wurde schon vor dem
+                    # Schreibversuch gezählt - bei einem Verbindungsausfall
+                    # verbrauchten die fehlgeschlagenen Versuche das gesamte
+                    # Kontingent, und der echte Stopp nach der Wiederkehr der
+                    # Verbindung wurde dann abgelehnt.
+                    recent.append(now_ts)
+                    self.switch_history = recent
 
-        if "ampere" in changes:
+        if "ampere" in changes and state_change_dropped:
+            # Der Ampere-Wert wurde für den Start mitgeplant (siehe
+            # force_ampere_write in _calculate()); ohne den Start ist er
+            # gegenstandslos.
+            self._rollback_ampere_change(changes["ampere"])
+        elif "ampere" in changes:
             try:
                 await self._modbus.write_single_register(
                     REG_AMPERE, int(round(changes["ampere"]["new"] * 10))
                 )
             except ModbusError as err:
                 _LOGGER.error("PVSC: Fehler beim Schreiben von ampere: %s", err)
+                # Schattenwert zurücknehmen: self.ampere soll spiegeln, was
+                # die Wallbox WIRKLICH kommandiert bekommen hat. Ohne das
+                # Rollback gilt der neue Zielwert intern als erreicht, das
+                # Totband greift sofort - und der fehlgeschlagene Schreib-
+                # vorgang wird nie wiederholt, bis der Überschuss weit genug
+                # weiterdriftet.
+                self._rollback_ampere_change(changes["ampere"])
 
         if "phases" in changes:
             try:
@@ -845,9 +942,21 @@ class PVSCCoordinator:
         optimal_soc = s["optimal_soc"]
         high_soc = s["high_soc"]
 
-        # Bei schlechter PV-Prognose (< 2x Restkapazität Batterie) strengere SOC-Grenzen
-        if self.has_battery and self.pv_forecast < (battery_kwh * ((100 - soc) / 100) * 2):
+        # Bei schlechter PV-Prognose (< 2x Restkapazität Batterie) strengere
+        # SOC-Grenzen. NUR wenn eine PV-Prognose-Entity konfiguriert ist: ohne
+        # sie bleibt self.pv_forecast konstant 0.0, die Bedingung wäre bei
+        # jedem SOC < 100 % erfüllt und würde die vom Nutzer eingestellten
+        # SOC-Stufen dauerhaft und unsichtbar durch 80/90/95 ersetzen (ein
+        # min_soc von z.B. 40 % hätte nie gewirkt). Die Prognose-Entity ist
+        # laut Setup-Dialog ausdrücklich optional - "nicht konfiguriert" darf
+        # deshalb nicht wie "schlechte Prognose" behandelt werden.
+        if (
+            self.has_battery
+            and self.has_pv_forecast
+            and self.pv_forecast < (battery_kwh * ((100 - soc) / 100) * 2)
+        ):
             min_soc, optimal_soc, high_soc = 80, 90, 95
+        self._effective_min_soc = min_soc
 
         local_now = dt_util.now()
 
@@ -855,8 +964,23 @@ class PVSCCoordinator:
         if override_mode == "stop":
             if self.state is True or em2go["plug_changed"]:
                 changes["made"] = True
-                changes["state"] = {"old": self.state, "new": False}
+                changes["state"] = {
+                    "old": self.state,
+                    "new": False,
+                    "prev_last_ts": self.last_state_change_ts,
+                }
                 self.state = False
+            # target_state und die Arbitrierungs-Flags hier ausdrücklich
+            # zurücksetzen: Der frühe return überspringt die Stelle weiter
+            # unten, an der sie sonst gesetzt werden. Blieben sie auf ihrem
+            # Wert von vor dem Override stehen (z.B. target_state=True aus
+            # einer laufenden Start-Hysterese), würde eine per Override
+            # gestoppte Box mit hoher Priorität eine niedriger priorisierte
+            # Box dauerhaft am Start hindern ("wartet auf Wallbox mit höherer
+            # Priorität"), obwohl sie selbst nie laden wird.
+            self.target_state = False
+            self._prio_blocked = False
+            self._fleet_blocked = False
             self.status_text = "🚫 Override: STOP"
             self.status_color = "grey"
             return changes
@@ -896,6 +1020,14 @@ class PVSCCoordinator:
             home["import"] < 0 or home["export"] < 0 or home["charge"] < 0 or home["discharge"] < 0
         ):
             surplus_mode = "load (saldo-fallback)"
+            # Der Rückfall auf den Last-Modus ist von außen sonst nicht
+            # erkennbar (kein eigener Sensor, kein Statustext) - zumindest
+            # im Debug-Log festhalten, WELCHER Wert gefehlt hat.
+            _LOGGER.debug(
+                "PVSC: Saldo-Modus nicht möglich (import=%s export=%s charge=%s "
+                "discharge=%s) - dieser Tick rechnet im Last-Modus",
+                home["import"], home["export"], home["charge"], home["discharge"],
+            )
 
         if surplus_mode == "saldo":
             surplus = round(
@@ -903,6 +1035,18 @@ class PVSCCoordinator:
             )
             self.load = round(self.pv - surplus)
             surplus = max(surplus, 0)
+        elif home["load"] < 0 or self.pv < 0:
+            # Sentinel-Schutz: _to_float() liefert -1, wenn eine Quell-Entity
+            # gerade "unavailable"/"unknown" ist (z.B. weil ihre eigene
+            # Integration neu verbindet). Ungeprüft ergäbe eine fehlende
+            # Hauslast load = -1 - P_Auto und damit einen FIKTIVEN Überschuss
+            # von pv + P_Auto + 1 W - die Regelung würde die Wallbox in
+            # Richtung Maximalstrom hochfahren und dafür echte Netzleistung
+            # ziehen. Deshalb: Überschuss auf 0 (sichere Richtung), letzte
+            # bekannte Hauslast unverändert stehen lassen. Der Ampere-Zielwert
+            # wird weiter unten zusätzlich eingefroren, solange core_ready
+            # False ist - ein kurzer Aussetzer ändert damit gar nichts.
+            surplus = 0
         else:
             self.load = home["load"] - em2go["power"]
             surplus = round(max(self.pv - self.load, 0))
@@ -937,7 +1081,12 @@ class PVSCCoordinator:
             self.battery.support_watts = 0
         elif soc >= high_soc:
             self.correction_faktor = 1.05 if self.battery.support_watts < 50 else 1.0
-            if local_now.hour >= 15 and self.pv_forecast < 5:
+            # Auch hier gilt: ohne konfigurierte Prognose-Entity ist
+            # self.pv_forecast konstant 0.0 und "< 5 kWh Restertrag" wäre
+            # jeden Nachmittag ab 15 Uhr dauerhaft erfüllt - der
+            # Korrekturfaktor würde also ohne Grund und ohne Hinweis täglich
+            # auf 0.9 gedrückt und die Batterie-Unterstützung abgeschaltet.
+            if self.has_pv_forecast and local_now.hour >= 15 and self.pv_forecast < 5:
                 self.correction_faktor = 0.9
                 self.battery.support_watts = 0
         elif soc >= optimal_soc:
@@ -975,6 +1124,22 @@ class PVSCCoordinator:
 
         target_ampere = round(car_surplus / (VOLT * effektive_phasen) * 10) / 10
         target_ampere = min(max_a, max(min_a, target_ampere))
+
+        # Sicherheits-Gate für den LADESTROM: Fehlt einer der konfigurierten
+        # Kern-Sensoren (core_ready False), beruht der oben berechnete
+        # Überschuss auf unvollständigen Daten und darf den Ladestrom NICHT
+        # verändern. Zielwert deshalb auf den zuletzt kommandierten Wert
+        # einfrieren - dann greift das Totband weiter unten und es wird gar
+        # nichts geschrieben. Der Stopp-Pfad bleibt unberührt: core_ready ist
+        # Teil von target_state, ein länger fehlender Sensor führt also nach
+        # der normalen Stopp-Hysterese trotzdem zum Stopp.
+        if not core_ready:
+            target_ampere = self.ampere
+
+        # Wird True, wenn der Ladestrom im SELBEN Tick mitgeschrieben werden
+        # muss, obwohl die normale Ampere-Hysterese noch nicht abgelaufen ist
+        # (Start und Phasenwechsel - siehe unten).
+        force_ampere_write = False
 
         if override_mode == "manual":
             target_ampere = min(max_a, max(6, self.override.get("ampere", 6)))
@@ -1017,6 +1182,24 @@ class PVSCCoordinator:
             if em2go["phases"] not in (-1, desired_phases):
                 changes["made"] = True
                 changes["phases"] = {"old": em2go["phases"], "new": desired_phases}
+                if self.state:
+                    # Ampere MUSS beim Phasenwechsel im selben Tick mit
+                    # angepasst werden: target_ampere oben ist noch für die
+                    # ALTE Phasenzahl gerechnet. Beim Hochschalten 1 -> 3
+                    # bliebe sonst der 1-phasige Sollwert (bis zu max_a)
+                    # stehen und würde plötzlich auf drei Phasen fließen -
+                    # also bis zum Dreifachen der eigentlich gewollten
+                    # Leistung, für die volle Dauer von ampere_change_delay.
+                    # Bewusst auf min_a statt auf den für die neue Phasenzahl
+                    # umgerechneten Wert: die Wallbox/das Auto brauchen für
+                    # den Phasenwechsel selbst einige Sekunden, und in welcher
+                    # Reihenfolge beide Register real wirksam werden, ist von
+                    # außen nicht sicher zu bestimmen. min_a ist in JEDER
+                    # Zwischenkombination unkritisch; die normale Hysterese
+                    # fährt den Strom danach wieder hoch (kurzzeitig etwas
+                    # weniger laden ist die harmlose Fehlerrichtung).
+                    target_ampere = min_a
+                    force_ampere_write = True
 
         if em2go["err_limit"] != FIXED_ERR_LIMIT:
             changes["made"] = True
@@ -1045,8 +1228,13 @@ class PVSCCoordinator:
         # Überschuss und takten sich anschließend gegenseitig herunter.
         # Gilt nur im PV-Modus; ein manueller Override ist eine bewusste
         # Nutzerentscheidung.
+        # p.control_enabled ist Teil der Bedingung: eine Box, deren Schalter
+        # "Steuerung aktiv" aus ist, schreibt nie auf ihre Wallbox und kann
+        # ihr target_state=True daher niemals in einen echten Ladevorgang
+        # überführen - ohne diese Prüfung würde sie eine niedriger
+        # priorisierte Box dauerhaft blockieren.
         self._prio_blocked = override_mode != "manual" and any(
-            p.target_state and not p.state for p in higher
+            p.target_state and not p.state and p.control_enabled for p in higher
         )
 
         # 3) Globales Leistungslimit (Option fleet_max_watts, kleinster
@@ -1102,12 +1290,21 @@ class PVSCCoordinator:
         state_change_needed = self.state != target_state or em2go["plug_changed"]
         deadband = opts.get("ampere_deadband", s.get("ampere_deadband", 0.1))
         ampere_change_needed = abs(self.ampere - target_ampere) >= deadband or em2go["plug_changed"]
+        # STATE_CHANGE_INTERVAL ist das Mindestintervall zwischen zwei
+        # ECHTEN Schaltvorgängen (siehe const.py). Es wird bewusst nur auf
+        # STARTS angewendet: ein Stopp ist immer die sichere Richtung und darf
+        # nie zusätzlich verzögert werden - sonst liefe das Auto nach einem
+        # gerade erfolgten Start noch bis zu STATE_CHANGE_INTERVAL Sekunden
+        # auf Netzstrom weiter, obwohl der Überschuss längst weg ist.
         state_change_allowed = (
             not self.state_change_ts
             or em2go["plug_changed"]
             or (
                 (now - self.state_change_ts) > state_change_delay
-                and (now - self.last_state_change_ts) > STATE_CHANGE_INTERVAL
+                and (
+                    not target_state
+                    or (now - self.last_state_change_ts) > STATE_CHANGE_INTERVAL
+                )
             )
         )
         ampere_change_allowed = (
@@ -1169,37 +1366,71 @@ class PVSCCoordinator:
                         self.ampere = min_a
                     else:
                         self.stop_cause = STOP_CAUSE_NONE
+                        # Beim START den Ladestrom im SELBEN Tick mitschreiben.
+                        # Register 91 behält seinen zuletzt geschriebenen Wert
+                        # über einen Stopp hinweg (er wird ja auch als Ist-Wert
+                        # zurückgelesen). Ohne diesen erzwungenen Schreib-
+                        # vorgang würde die Wallbox nach dem Start zunächst mit
+                        # dem ALTEN Strom des letzten Ladevorgangs (z.B. 16 A)
+                        # weiterlaufen, bis die normale Ampere-Hysterese
+                        # (ampere_change_delay, bis zu 10 Minuten einstellbar)
+                        # abgelaufen ist - und in der Zeit Netzstrom ziehen.
+                        force_ampere_write = True
 
                     changes["made"] = True
-                    changes["state"] = {"old": self.state, "new": target_state}
+                    changes["state"] = {
+                        "old": self.state,
+                        "new": target_state,
+                        "prev_last_ts": self.last_state_change_ts,
+                    }
                     self.state = target_state
-                    self.last_state_change_ts = self.state_change_ts
+                    # Zeitstempel des TATSÄCHLICHEN Schaltvorgangs, nicht der
+                    # des Hysterese-Starts: davor wurde das Mindestintervall
+                    # ab dem Beginn der Wartezeit gemessen und war deshalb
+                    # praktisch immer schon abgelaufen, sobald die Wartezeit
+                    # selbst vorbei war - das Rate-Limit war damit wirkungslos.
+                    self.last_state_change_ts = now
                     self.state_change_ts = 0
                     self.last_update = now
             else:
                 self.state_change_ts = 0
         else:
             if em2go["plug_changed"]:
+                changes["made"] = True
+                changes["state"] = {
+                    "old": self.state,
+                    "new": False,
+                    "prev_last_ts": self.last_state_change_ts,
+                }
                 self.state = False
                 self.target_state = False
                 target_ampere = min_a
                 self.target_ampere = min_a
                 self.ampere = min_a
-                changes["made"] = True
-                changes["state"] = {"old": self.state, "new": False}
                 self.state_change_ts = 0
                 self.ampere_change_ts = 0
                 self.last_update = 0
 
         if self.state is True:
-            if ampere_change_needed:
-                if not self.ampere_change_ts and not em2go["plug_changed"]:
+            if ampere_change_needed or force_ampere_write:
+                if (
+                    not self.ampere_change_ts
+                    and not em2go["plug_changed"]
+                    and not force_ampere_write
+                ):
                     self.ampere_change_ts = now
-                elif ampere_change_allowed:
+                elif ampere_change_allowed or force_ampere_write:
                     changes["made"] = True
-                    changes["ampere"] = {"old": self.ampere, "new": target_ampere}
+                    changes["ampere"] = {
+                        "old": self.ampere,
+                        "new": target_ampere,
+                        "prev_last_ts": self.last_ampere_change_ts,
+                    }
                     self.ampere = target_ampere
-                    self.last_ampere_change_ts = self.ampere_change_ts
+                    self.target_ampere = target_ampere
+                    # Wie beim Zustandswechsel: Zeitstempel der tatsächlichen
+                    # Änderung, nicht der des Hysterese-Beginns.
+                    self.last_ampere_change_ts = now
                     self.ampere_change_ts = 0
                     self.last_update = now
             else:
@@ -1255,13 +1486,34 @@ class PVSCCoordinator:
                 if en
                 else "Wartet auf Wallbox mit höherer Priorität"
             )
+        elif (
+            override_mode == "manual"
+            and self.has_battery
+            and home["soc"] < self._effective_min_soc
+        ):
+            # Der manuelle Override ist zwar eine bewusste Nutzerentscheidung,
+            # die SOC-Untergrenze bleibt trotzdem ein harter Schutz für den
+            # Heimspeicher (siehe target_state in _calculate()). Ohne diesen
+            # eigenen Text meldete die Karte in dieser Situation bloß "Wartet
+            # auf PV-Überschuss" - der Nutzer sah also nicht, dass sein
+            # ausdrücklicher Ladebefehl an der SOC-Grenze hängt.
+            text = (
+                "Manual override blocked: home battery SOC too low"
+                if en
+                else "Manuell blockiert: Heimspeicher-SOC zu niedrig"
+            )
         elif self.stop_cause:
             text = (
                 f"Stopped: {self.stop_cause_text}" if en else f"Gestoppt: {self.stop_cause_text}"
             )
         elif em2go["state"] == 6:
             text = "Charging finished" if en else "Laden beendet"
-        elif self.has_battery and home["soc"] < self.settings["min_soc"]:
+        elif self.has_battery and home["soc"] < self._effective_min_soc:
+            # _effective_min_soc statt settings["min_soc"]: bei schlechter
+            # PV-Prognose hebt _calculate() die Untergrenze an - der Status
+            # soll den WIRKSAMEN Wert widerspiegeln, sonst meldet die Karte
+            # "Wartet auf PV-Überschuss", obwohl in Wahrheit die (angehobene)
+            # SOC-Grenze blockiert.
             text = (
                 "Waiting: home battery SOC too low"
                 if en
@@ -1277,7 +1529,7 @@ class PVSCCoordinator:
             color = "blue"
         if home["import"] > 100:
             color = "red"
-        if self.has_battery and home["soc"] < min(self.settings["min_soc"], 100):
+        if self.has_battery and home["soc"] < min(self._effective_min_soc, 100):
             color = "grey"
 
         if not getattr(self, "core_ready", True):

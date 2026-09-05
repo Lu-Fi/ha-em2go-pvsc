@@ -54,6 +54,16 @@ class ModbusCooldownError(ModbusError):
     """Verbindung wird gerade bewusst NICHT versucht (Cool-down nach Fehler)."""
 
 
+class ModbusClosedError(ModbusCooldownError):
+    """Der Client wurde geschlossen (Unload/Reload) - kein Verbindungsaufbau mehr.
+
+    Bewusst von ModbusCooldownError abgeleitet: Wie beim Cool-down ist das
+    KEIN echter Kommunikationsfehler, sondern erwartetes Verhalten. So
+    behandelt der Coordinator den Fall automatisch richtig (nur Debug-Log,
+    kein Eintrag im 24h-Fehlerzähler).
+    """
+
+
 def _crc16(data: bytes) -> int:
     """Modbus-CRC16 (Polynom 0xA001, wie in jeder Modbus-RTU-Implementierung)."""
     crc = 0xFFFF
@@ -68,7 +78,12 @@ def _crc16(data: bytes) -> int:
 
 
 class ModbusTcpClient:
-    """Serialisierter RTU-über-TCP Client mit Fehler-Backoff."""
+    """Serialisierter Modbus-TCP Client mit Fehler-Backoff.
+
+    Standard-Framing ist MBAP (echtes Modbus-TCP) - das ist der für diese
+    Wallbox bestätigte Modus; `rtu` bleibt nur als Vergleichs-/Rückfallmodus
+    erhalten (siehe Modul-Docstring).
+    """
 
     def __init__(
         self,
@@ -79,7 +94,7 @@ class ModbusTcpClient:
         command_delay: float = 0.1,
         reconnect_backoff: float = 10.0,
         connect_settle_delay: float = 0.25,
-        framing: str = "rtu",
+        framing: str = "mbap",
     ) -> None:
         self._host = host
         self._port = port
@@ -88,17 +103,31 @@ class ModbusTcpClient:
         self._command_delay = command_delay
         self._base_backoff = max(reconnect_backoff, 0.5)
         self._connect_settle_delay = max(connect_settle_delay, 0.0)
+        # "mbap": echtes Modbus-TCP mit MBAP-Header + Transaction-ID - der
+        # bestätigt richtige und deshalb voreingestellte Modus für diese
+        # Wallbox (siehe Modul-Docstring und DEFAULT_MODBUS_FRAMING).
         # "rtu": rohe RTU-Rahmen (Unit+Func+Daten+CRC16), kein MBAP-Header -
-        # vermuteter Modus für diese Wallbox (Serial-zu-TCP-Bridge).
-        # "mbap": echtes Modbus-TCP mit MBAP-Header + Transaction-ID -
-        # Fallback, falls sich die RTU-Vermutung nicht bestätigt.
+        # nur noch Vergleichs-/Rückfallmodus.
         # Per Option umschaltbar, damit ein Vergleich ohne HA-Neustart
         # möglich ist (nur Config-Entry-Reload nötig).
-        self._framing = framing if framing in ("rtu", "mbap") else "rtu"
+        self._framing = framing if framing in ("rtu", "mbap") else "mbap"
         self._transaction_id = 0
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._lock = asyncio.Lock()
+        # Ab close() endgültig True: Die Wallbox akzeptiert nur EINE
+        # Modbus-TCP-Verbindung. Ohne diese Sperre könnte ein Tick, der beim
+        # Unload/Reload schon an der Verbindungsprüfung vorbei war, die
+        # Verbindung danach erneut aufbauen - der neue Client nach dem Reload
+        # bekäme dann keine Verbindung mehr, bis die verwaiste eingesammelt
+        # wird.
+        self._closed = False
+        # Aktueller Bearbeitungsschritt der laufenden Transaktion, nur für
+        # aussagekräftige Fehlermeldungen. Als Instanz-Attribut statt lokaler
+        # Variable, damit auch die Framing-Hilfsmethoden ihn setzen können -
+        # sonst meldete JEDER Fehler "Verbindungsaufbau", auch ein Timeout
+        # beim Lesen der Antwort. Zugriff nur unter self._lock.
+        self._phase = "Verbindungsaufbau"
 
         self._consecutive_failures = 0
         self._last_failure_ts = 0.0
@@ -126,6 +155,12 @@ class ModbusTcpClient:
     # Verbindungsverwaltung
     # ------------------------------------------------------------------
     async def _ensure_connected(self) -> None:
+        if self._closed:
+            raise ModbusClosedError(
+                "Modbus-Client wurde geschlossen (Unload/Reload) - "
+                "es wird keine neue Verbindung mehr aufgebaut"
+            )
+
         if self._writer is not None and not self._writer.is_closing():
             return
 
@@ -152,6 +187,11 @@ class ModbusTcpClient:
             await asyncio.sleep(self._connect_settle_delay)
 
     async def close(self) -> None:
+        # Die Markierung MUSS vor dem Warten auf den Lock gesetzt werden:
+        # Läuft gerade eine Transaktion, wartet close() auf sie - eine
+        # bereits angestoßene weitere Transaktion darf danach aber keine
+        # neue Verbindung mehr öffnen (siehe _closed/_ensure_connected).
+        self._closed = True
         async with self._lock:
             await self._force_close()
 
@@ -181,7 +221,7 @@ class ModbusTcpClient:
     # ------------------------------------------------------------------
     async def _transact(self, function_code: int, data: bytes) -> bytes:
         async with self._lock:
-            phase = "Verbindungsaufbau"
+            self._phase = "Verbindungsaufbau"
             try:
                 was_fresh = self._writer is None or self._writer.is_closing()
                 await self._ensure_connected()
@@ -192,9 +232,9 @@ class ModbusTcpClient:
                     )
 
                 if self._framing == "mbap":
-                    payload, phase = await self._transact_mbap(function_code, data, phase)
+                    payload = await self._transact_mbap(function_code, data)
                 else:
-                    payload, phase = await self._transact_rtu(function_code, data, phase)
+                    payload = await self._transact_rtu(function_code, data)
 
             except ModbusCooldownError:
                 raise
@@ -208,7 +248,7 @@ class ModbusTcpClient:
                 self._record_failure()
                 detail = str(err) or type(err).__name__
                 raise ModbusError(
-                    f"Modbus I/O Fehler bei '{phase}' [{self._framing}] "
+                    f"Modbus I/O Fehler bei '{self._phase}' [{self._framing}] "
                     f"({self._host}:{self._port}), "
                     f"Fehler Nr. {self._consecutive_failures} in Folge, "
                     f"nächster Versuch in {self._current_backoff():.0f}s: {detail}"
@@ -219,7 +259,7 @@ class ModbusTcpClient:
                 await self._force_close()
                 self._record_failure()
                 raise ModbusError(
-                    f"Modbus Protokollfehler bei '{phase}' [{self._framing}] "
+                    f"Modbus Protokollfehler bei '{self._phase}' [{self._framing}] "
                     f"({self._host}:{self._port}): {err}"
                 ) from err
 
@@ -228,27 +268,25 @@ class ModbusTcpClient:
                 await asyncio.sleep(self._command_delay)
             return payload
 
-    async def _transact_rtu(
-        self, function_code: int, data: bytes, phase: str
-    ) -> tuple[bytes, str]:
+    async def _transact_rtu(self, function_code: int, data: bytes) -> bytes:
         """RTU-Framing direkt über TCP: [Unit][Func][Daten][CRC16], keine
         MBAP-Hülle, keine Transaction-ID."""
         request = struct.pack(">BB", self._unit_id, function_code) + data
         request += struct.pack("<H", _crc16(request))
 
-        phase = "Senden der Anfrage"
+        self._phase = "Senden der Anfrage"
         self._writer.write(request)
         await self._writer.drain()
 
         # RTU-Rahmen haben keinen expliziten Längen-Header wie MBAP - zuerst
         # Unit-ID + Function-Code lesen, daraus ergibt sich, wie viele Bytes
         # noch folgen.
-        phase = "Lesen der Antwort (Unit/Function)"
+        self._phase = "Lesen der Antwort (Unit/Function)"
         head = await asyncio.wait_for(self._reader.readexactly(2), timeout=self._timeout)
         resp_unit, resp_func = struct.unpack(">BB", head)
 
         if resp_func & 0x80:
-            phase = "Lesen der Antwort (Exception)"
+            self._phase = "Lesen der Antwort (Exception)"
             rest = await asyncio.wait_for(
                 self._reader.readexactly(3), timeout=self._timeout
             )  # exception_code(1) + CRC(2)
@@ -257,25 +295,23 @@ class ModbusTcpClient:
             raise ModbusError(f"Modbus Exception, function=0x{resp_func:02x} code={rest[0]}")
 
         if function_code == FUNC_READ_HOLDING_REGISTERS:
-            phase = "Lesen der Antwort (Byte-Count)"
+            self._phase = "Lesen der Antwort (Byte-Count)"
             bc_raw = await asyncio.wait_for(self._reader.readexactly(1), timeout=self._timeout)
             byte_count = bc_raw[0]
-            phase = "Lesen der Antwort (Daten+CRC)"
+            self._phase = "Lesen der Antwort (Daten+CRC)"
             rest = await asyncio.wait_for(
                 self._reader.readexactly(byte_count + 2), timeout=self._timeout
             )
             self._verify_crc(head + bc_raw + rest)
-            return rest[:byte_count], phase
+            return rest[:byte_count]
 
         # FC6 (write single register): Echo aus Adresse(2)+Wert(2)+CRC(2)
-        phase = "Lesen der Antwort (Echo+CRC)"
+        self._phase = "Lesen der Antwort (Echo+CRC)"
         rest = await asyncio.wait_for(self._reader.readexactly(6), timeout=self._timeout)
         self._verify_crc(head + rest)
-        return rest[:4], phase
+        return rest[:4]
 
-    async def _transact_mbap(
-        self, function_code: int, data: bytes, phase: str
-    ) -> tuple[bytes, str]:
+    async def _transact_mbap(self, function_code: int, data: bytes) -> bytes:
         """Echtes Modbus-TCP: MBAP-Header (Transaction-ID, Protocol-ID,
         Length, Unit-ID) gefolgt vom PDU, keine CRC (TCP garantiert
         Integrität bereits)."""
@@ -284,7 +320,7 @@ class ModbusTcpClient:
         tid = self._transaction_id
         header = struct.pack(">HHHB", tid, 0, len(pdu) + 1, self._unit_id)
 
-        phase = "Senden der Anfrage"
+        self._phase = "Senden der Anfrage"
         self._writer.write(header + pdu)
         await self._writer.drain()
 
@@ -296,13 +332,13 @@ class ModbusTcpClient:
         # bis die zur aktuellen Transaction-ID passende kommt.
         body = b""
         for _ in range(6):  # aktuelle Antwort + max. 5 veraltete
-            phase = "Lesen der Antwort (Header)"
+            self._phase = "Lesen der Antwort (Header)"
             resp_header = await asyncio.wait_for(
                 self._reader.readexactly(7), timeout=self._timeout
             )
             r_tid, _r_proto, r_len, _r_unit = struct.unpack(">HHHB", resp_header)
 
-            phase = "Lesen der Antwort (Body)"
+            self._phase = "Lesen der Antwort (Body)"
             body = await asyncio.wait_for(
                 self._reader.readexactly(r_len - 1), timeout=self._timeout
             )
@@ -329,8 +365,8 @@ class ModbusTcpClient:
 
         if function_code == FUNC_READ_HOLDING_REGISTERS:
             byte_count = body[1]
-            return body[2 : 2 + byte_count], phase
-        return body[1:5], phase
+            return body[2 : 2 + byte_count]
+        return body[1:5]
 
     @staticmethod
     def _verify_crc(frame: bytes) -> None:
@@ -348,7 +384,19 @@ class ModbusTcpClient:
         data = struct.pack(">HH", address, quantity)
         payload = await self._transact(FUNC_READ_HOLDING_REGISTERS, data)
         count = len(payload) // 2
-        return list(struct.unpack(f">{count}H", payload[: count * 2]))
+        if count < quantity:
+            # Verstümmelte/zu kurze Antwort (z.B. Byte-Count 0) hier als
+            # regulären Modbus-Fehler melden, statt eine unvollständige
+            # Registerliste zurückzugeben: Der Aufrufer indiziert sie sonst
+            # blind (values["ampere"][0]) und läuft mitten im Aktualisieren
+            # des Wallbox-Zustands in einen ungefangenen IndexError - der
+            # Tick bräche dann mit halb aktualisierten Werten ab, ohne den
+            # Poll sauber als fehlgeschlagen zu markieren.
+            raise ModbusError(
+                f"Modbus Antwort zu kurz: {count} statt {quantity} Register "
+                f"ab Adresse {address} ({self._host}:{self._port})"
+            )
+        return list(struct.unpack(f">{quantity}H", payload[: quantity * 2]))
 
     async def write_single_register(self, address: int, value: int) -> None:
         """Schreibt EIN Register - aber per FC16 (Write Multiple Registers).

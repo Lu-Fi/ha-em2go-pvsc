@@ -1,4 +1,4 @@
-"""Binäre Sensoren der PV Überschussladen (Test) Integration."""
+"""Binäre Sensoren der Integration EM2GO Home PV-Überschussladen (pvsc)."""
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -1,4 +1,4 @@
-"""Buttons der PV Überschussladen (Test) Integration."""
+"""Buttons der Integration EM2GO Home PV-Überschussladen (pvsc)."""
 from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity

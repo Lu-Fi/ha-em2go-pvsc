@@ -1,4 +1,4 @@
-// PVSC Card - Begleit-Card zur "PV Überschussladen (Test)" Integration.
+// PVSC Card - Begleit-Card zur Integration "EM2GO Home PV-Überschussladen".
 // Angelehnt an wallbox-stecker-card.js, aber verdrahtet auf die neuen
 // pvsc_* Entities (unabhängige Home-Assistant-Integration statt Node-RED/MQTT).
 // Override-Befehle werden über normale HA-Services gesendet
@@ -237,9 +237,15 @@ class PvscCard extends HTMLElement {
     this.shadowRoot.querySelectorAll('.amp-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         if (!this._hass) return;
-        const cur = parseInt(this._hass.states[this._config.override_ampere_entity]?.state ?? '6');
+        const ampState = this._hass.states[this._config.override_ampere_entity];
+        const cur = parseInt(ampState?.state ?? '6');
         const delta = parseInt(btn.dataset.delta);
-        const next = Math.min(16, Math.max(6, cur + delta));
+        // Obergrenze aus der Entity selbst (folgt der Option "max_ampere":
+        // 16 A bei der 11-kW-, 32 A bei der 22-kW-Wallbox) statt fest 16 -
+        // sonst liesse sich bei einer 22-kW-Box hier nie über 16 A stellen.
+        const maxA = Number(ampState?.attributes?.max ?? 16);
+        const minA = Number(ampState?.attributes?.min ?? 6);
+        const next = Math.min(maxA, Math.max(minA, cur + delta));
         this._callService('number', 'set_value', {
           entity_id: this._config.override_ampere_entity, value: next,
         });
@@ -523,7 +529,7 @@ if (!customElements.get('pvsc-card-editor')) {
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'pvsc-card',
-  name: 'PV Überschussladen (Test)',
-  description: 'Begleit-Card zur pvsc Integration (Schatten-Modus Testkarte)',
+  name: 'EM2GO Home PV-Überschussladen',
+  description: 'Begleit-Card zur pvsc Integration (Status, Override, Ampere/Phasen)',
   preview: false,
 });

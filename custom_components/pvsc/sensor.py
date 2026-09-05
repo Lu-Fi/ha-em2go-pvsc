@@ -1,4 +1,4 @@
-"""Sensoren der PV Überschussladen (Test) Integration."""
+"""Sensoren der Integration EM2GO Home PV-Überschussladen (pvsc)."""
 from __future__ import annotations
 
 from dataclasses import dataclass

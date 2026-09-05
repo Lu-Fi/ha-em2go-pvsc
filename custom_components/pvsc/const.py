@@ -189,10 +189,19 @@ DEFAULT_OVERRIDE = {
 # STATE_CHANGE_INTERVAL und AMPERE_CHANGE_INTERVAL bleiben bewusst fest
 # (nicht konfigurierbar): das ist ein zusätzliches Rate-Limit, das verhindert,
 # dass kurz nacheinander zwei Zustands-/Ampere-Änderungen passieren, selbst
-# wenn die jeweilige *_DELAY schon abgelaufen ist - z.B. blockiert es einen
-# Stopp weiterhin bis mindestens STATE_CHANGE_INTERVAL Sekunden seit der
-# letzten Zustandsänderung vergangen sind, auch wenn state_change_off_delay
-# kürzer eingestellt wurde.
+# wenn die jeweilige *_DELAY schon abgelaufen ist.
+#
+# STATE_CHANGE_INTERVAL gilt ausdrücklich NUR für STARTS (siehe
+# state_change_allowed in coordinator._calculate()). Ein Stopp ist immer die
+# sichere Richtung und darf nie zusätzlich verzögert werden - sonst liefe das
+# Auto nach einem gerade erfolgten Start noch bis zu STATE_CHANGE_INTERVAL
+# Sekunden auf Netzstrom weiter, obwohl der Überschuss schon weg ist.
+#
+# Gemessen wird ab der TATSÄCHLICHEN letzten Änderung. Bis 0.6.0 wurde
+# fälschlich ab dem Beginn der Hysterese-Wartezeit gemessen; da diese Wartezeit
+# selbst schon so lange dauert, war das Intervall in dem Moment, in dem die
+# Änderung anstand, praktisch immer bereits abgelaufen - die Sperre hatte also
+# faktisch keine Wirkung.
 STATE_CHANGE_INTERVAL = 3 * 60
 AMPERE_CHANGE_INTERVAL = 30
 
