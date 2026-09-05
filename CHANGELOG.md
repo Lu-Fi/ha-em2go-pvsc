@@ -2,6 +2,12 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.6] - 2026-09-05
+
+### Fixed
+
+- **The options dialog could not be saved at all without a notify entity configured.** Every save failed with `Entity is neither a valid entity ID nor a valid UUID` on the "Notify entity" field, no matter which setting was actually being changed. The field was declared `vol.Optional(..., default="")`: the frontend drops an empty picker from the submission, voluptuous then filled the `""` default back in, and the `EntitySelector` rejected it as an invalid entity ID. Affected everyone without a notify entity set, since the option was introduced. The field now uses `suggested_value` instead of `default`, so an empty picker is simply omitted (= no notifications, as before). Same bug and fix as [ha-lacrosse-jeelink#3](https://github.com/Lu-Fi/ha-lacrosse-jeelink/issues/3).
+
 ## [0.5.5] - 2026-08-30
 
 ### Fixed

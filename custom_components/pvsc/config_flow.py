@@ -20,7 +20,6 @@ from .const import (
     DEFAULT_INVERTER_MAX_OUTPUT,
     DEFAULT_MAX_BATTERY_DISCHARGE,
     DEFAULT_MAX_LOAD,
-    DEFAULT_NOTIFY_ENTITY,
     MAX_A,
     DEFAULT_MODBUS_COMMAND_DELAY,
     DEFAULT_MODBUS_CONNECT_SETTLE_DELAY,
@@ -205,9 +204,13 @@ class PVSCOptionsFlow(config_entries.OptionsFlow):
                     "notify_enabled",
                     default=opts.get("notify_enabled", True),
                 ): bool,
+                # suggested_value, not default: the frontend drops an empty
+                # picker from the submission, and a default of "" would then
+                # be filled back in and rejected by the EntitySelector.
+                # Left empty, the key is simply absent -> no notifications.
                 vol.Optional(
                     "notify_entity",
-                    default=opts.get("notify_entity", DEFAULT_NOTIFY_ENTITY),
+                    description={"suggested_value": opts.get("notify_entity")},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="notify")
                 ),
