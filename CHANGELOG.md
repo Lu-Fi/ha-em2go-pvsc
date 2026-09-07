@@ -2,6 +2,12 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0b3] - 2026-09-07 (prerelease)
+
+### Fixed
+
+- `ignore_car_location` (added in 0.6.0b2) had no translation string, so the options dialog showed the raw key instead of a label. Added to `strings.json` and both `translations/*.json`.
+
 ## [0.6.0b2] - 2026-09-07 (prerelease)
 
 ### Added

@@ -79,6 +79,7 @@
           "modbus_framing": "Modbus Framing: 'mbap' (echtes Modbus-TCP, richtig für die EM2GO) oder 'rtu' (rohe RTU-Rahmen, nur als Vergleichsmodus)",
           "max_ampere": "Maximaler Ladestrom (A, 16 bei 11-kW-, 32 bei 22-kW-Version)",
           "car_charge_phases": "Phasen, die das Auto beim 3-phasigen Laden tatsächlich nutzt (manche Autos laden auch bei 3-phasig angebotenem Strom nur auf 2 Phasen) - bestimmt die Schwellen der automatischen Phasenumschaltung",
+          "ignore_car_location": "Standort-Pflicht abschalten (Ladestart erfordert nicht mehr, dass der Auto-Standort-Tracker 'zuhause' meldet) - hilfreich, wenn dieser öfter 'nicht verfügbar' ist (z. B. abgelaufenes Abo, kein Empfang am Stellplatz); der Stecker-Status bleibt die eigentliche Bedingung",
           "state_change_on_delay": "Start delay (seconds) - how long the surplus must exceed the minimum before charging actually starts",
           "state_change_off_delay": "Stop delay (seconds) - how long the surplus must be insufficient before charging actually stops",
           "ampere_change_delay": "Current adjustment delay (seconds) - how long the target current must differ before the wallbox setpoint is adjusted",
