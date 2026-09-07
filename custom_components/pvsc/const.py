@@ -140,6 +140,16 @@ DEFAULT_OVERRIDE_PHASES = 1
 # ist daher pro Wallbox über den Options-Flow einstellbar (Default: 3).
 DEFAULT_PHASE_AUTO = False
 DEFAULT_CAR_CHARGE_PHASES = 3
+
+# Standort-Pflicht (Options-Flow, Default aus - Verhalten unveraendert):
+# ist car_location_entity konfiguriert, verlangt der Ladestart bisher hart
+# car["location"] == "home". Ein Connected-Car-Tracker liefert GPS/Schloss-
+# Status aber oft "unavailable", wenn das Auto in einer Garage/Tiefgarage
+# ohne Empfang steht - Ladezustand/-leistung kommen ueber einen anderen Kanal
+# meist trotzdem an. In dem Fall blockiert die Standortpruefung den Ladestart,
+# obwohl der Stecker laengst verbunden ist. ignore_car_location=True schaltet
+# die Pruefung ganz ab (Stecker-Erkennung bleibt die einzige Bedingung).
+DEFAULT_IGNORE_CAR_LOCATION = False
 PHASE_CHANGE_DELAY = 5 * 60  # Sekunden stabile Über-/Unterschreitung
 PHASE_UP_AMPERE = 7
 PHASE_DOWN_AMPERE = 6

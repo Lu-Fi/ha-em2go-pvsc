@@ -15,6 +15,7 @@ from .const import (
     DEFAULT_AMPERE_DEADBAND,
     DEFAULT_BATTERY_KWH,
     DEFAULT_CAR_CHARGE_PHASES,
+    DEFAULT_IGNORE_CAR_LOCATION,
     DEFAULT_STATE_CHANGE_OFF_DELAY,
     DEFAULT_STATE_CHANGE_ON_DELAY,
     DEFAULT_INVERTER_MAX_OUTPUT,
@@ -286,6 +287,17 @@ class PVSCOptionsFlow(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
+                # Ist car_location_entity im Setup konfiguriert, verlangt der
+                # Ladestart per Default zusaetzlich car["location"] == "home".
+                # Ein Connected-Car-Tracker meldet GPS/Schloss-Status aber oft
+                # "unavailable", wenn das Auto ohne Empfang steht (Garage/
+                # Tiefgarage) - der Ladestart bleibt dann trotz verbundenem
+                # Stecker blockiert. Hier abschaltbar, ohne car_location_entity
+                # selbst zu entfernen (die Anzeige "Auto zuhause" bleibt).
+                vol.Required(
+                    "ignore_car_location",
+                    default=opts.get("ignore_car_location", DEFAULT_IGNORE_CAR_LOCATION),
+                ): bool,
                 # Hysterese-Delays und Ampere-Totband: seit 0.5.0b10 wieder
                 # hier (statt als number-Entities) - Parameter, die selten
                 # geändert werden. Pro Config-Eintrag = pro Wallbox.

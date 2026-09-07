@@ -2,6 +2,12 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0b2] - 2026-09-07 (prerelease)
+
+### Added
+
+- **`ignore_car_location` (Options-Flow, default off): lets the location gate on charge start be switched off.** When `car_location_entity` is configured, starting a charge has always additionally required its state to be `"home"`. A connected-car device tracker commonly goes `unavailable` (not `not_home`) when the car has no GPS/cellular reception where it's parked — e.g. underground or in a garage — even though charge state/power from the same integration keep updating fine over a different channel. `unavailable` is not `"home"`, so charging stayed blocked despite the plug being connected and PV surplus available. The toggle disables the check entirely (plug detection remains the real presence signal); `binary_sensor.pvsc_car_home` keeps showing the tracker's raw state either way.
+
 ## [0.6.0b1] - 2026-09-05 (prerelease)
 
 Safety and correctness pass over the charging control loop. Several of these

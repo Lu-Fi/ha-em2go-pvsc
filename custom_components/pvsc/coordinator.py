@@ -30,6 +30,7 @@ from .const import (
     DEFAULT_AMPERE_CHANGE_DELAY,
     DEFAULT_CAR_CHARGE_PHASES,
     DEFAULT_ENABLED,
+    DEFAULT_IGNORE_CAR_LOCATION,
     DEFAULT_MODBUS_FRAMING,
     DEFAULT_NOTIFY_ENTITY,
     DEFAULT_OVERRIDE,
@@ -1005,6 +1006,15 @@ class PVSCCoordinator:
         car_charge_phases = int(
             self.entry.options.get("car_charge_phases", DEFAULT_CAR_CHARGE_PHASES)
         )
+        # Standort-Pflicht abschaltbar (Options-Flow, Default aus): ein
+        # Connected-Car-Tracker liefert "unavailable" statt "home", wenn das
+        # Auto ohne GPS-/Funkempfang steht (Garage) - Ladezustand/-leistung
+        # kommen dabei oft trotzdem an. Betrifft NUR die Start/Stopp-
+        # Bedingung unten und den Abbruchgrund-Text; car["location"] wird
+        # weiterhin angezeigt (binary_sensor.pvsc_car_home).
+        ignore_car_location = self.entry.options.get(
+            "ignore_car_location", DEFAULT_IGNORE_CAR_LOCATION
+        )
         # Mindestleistung für die Start/Stopp-Entscheidung: Bei aktiver
         # Phasenautomatik zählt das 1-PHASIGE Minimum - fällt der Überschuss
         # unter das 3-phasige (bzw. bei car_charge_phases=2: 2-phasige)
@@ -1261,7 +1271,7 @@ class PVSCCoordinator:
             and not self._fleet_blocked
             and soc >= min_soc
             and em2go["plug"] == 1
-            and (not self.has_car_location or car["location"] == "home")
+            and (not self.has_car_location or ignore_car_location or car["location"] == "home")
             and self.enabled
             and em2go["state"] != 6
             and core_ready
@@ -1353,7 +1363,11 @@ class PVSCCoordinator:
                         elif (
                             not self.enabled
                             or em2go["state"] == 6
-                            or (self.has_car_location and car["location"] != "home")
+                            or (
+                                self.has_car_location
+                                and not ignore_car_location
+                                and car["location"] != "home"
+                            )
                             or not core_ready
                         ):
                             self.stop_cause = STOP_CAUSE_NONE
