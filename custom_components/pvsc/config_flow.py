@@ -213,7 +213,9 @@ class PVSCOptionsFlow(config_entries.OptionsFlow):
                     "notify_entity",
                     description={"suggested_value": opts.get("notify_entity")},
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="notify")
+                    selector.EntitySelectorConfig(
+                        domain="notify", integration="telegram_bot"
+                    )
                 ),
                 vol.Required(
                     "max_load", default=opts.get("max_load", DEFAULT_MAX_LOAD)
