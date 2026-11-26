@@ -2,6 +2,12 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0b4] - 2026-11-26 (prerelease)
+
+### Fixed
+
+- Carries the Telegram-only notification fix from 0.5.7 into the 0.6.0 beta line: the notify-entity selector is limited to the Telegram bot integration, and README and field label say so. No other change since 0.6.0b3.
+
 ## [0.6.0b3] - 2026-09-07 (prerelease)
 
 ### Fixed
