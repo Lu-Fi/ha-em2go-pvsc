@@ -129,6 +129,7 @@ Set when you first add the integration (**Settings → Devices & Services → Ad
 | PV forecast for the rest of the day (kWh) | Optional. When the forecast is low relative to the battery's remaining capacity, the SOC thresholds (`min_soc`/`optimal_soc`/`high_soc`) are temporarily tightened to 80/90/95 % to conserve the home battery. Without this sensor there is no tightening at all — your configured SOC levels apply unchanged. |
 | Car SOC / car charge end time / car charging power | Optional, display-only sensors — no effect on charging decisions. |
 | Car location (device tracker) | Optional. If set, charging additionally requires the tracker to report "home" — useful if your PV/load sensors can't otherwise tell whether the car is actually there. |
+| Disable the location requirement | Off by default. Switches the location gate above off, so charging no longer requires the tracker to report "home" — useful when the tracker often goes `unavailable` (no reception where the car is parked, expired subscription). The connected plug remains the real condition. |
 
 ### Options (gear icon → "Configure", changeable anytime)
 

@@ -2,6 +2,16 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-11-26
+
+Promotes the 0.6.0 beta line (0.6.0b1 to 0.6.0b4) to stable, with no code change since 0.6.0b4. The beta entries below list everything it contains:
+
+- the charging-control safety and correctness pass (0.6.0b1),
+- the `ignore_car_location` option (0.6.0b2, translation in 0.6.0b3),
+- the Telegram-only notification selector (0.5.7, carried into 0.6.0b4).
+
+The README now documents the `ignore_car_location` option.
+
 ## [0.6.0b4] - 2026-11-26 (prerelease)
 
 ### Fixed
