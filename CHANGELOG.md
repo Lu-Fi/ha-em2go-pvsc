@@ -2,6 +2,12 @@
 
 All notable changes to this integration are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.7] - 2026-11-26
+
+### Fixed
+
+- Notifications are Telegram only, and the options dialog now says so. The notification code calls `telegram_bot.send_message`, but the notify-entity selector offered every `notify` entity and the README promised mobile-app notifications as well; picking a non-Telegram entity produced no messages, only a log warning. The selector is now limited to entities of the Telegram bot integration, and the README and field label match.
+
 ## [0.5.6] - 2026-09-05
 
 ### Fixed
